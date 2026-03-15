@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, updateDoc } from 'firebase/firestore';
-import { storage, db } from '../firebase';
+import { db } from '../firebase';
+import { uploadImage } from '../services/cloudinaryService';
 import { UserProfile } from '../types';
 
 interface Props {
@@ -18,13 +18,12 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
     if (!file) return;
     setIsUploading(true);
     try {
-      const imageRef = ref(storage, `profiles/${user.id}/photo_${Date.now()}`);
-      await uploadBytes(imageRef, file);
-      const url = await getDownloadURL(imageRef);
+      const url = await uploadImage(file, user.id);
       await updateDoc(doc(db, 'users', user.id), { images: [url] });
       setUser(prev => prev ? { ...prev, images: [url] } : null);
     } catch (err) {
       console.error('Erreur upload:', err);
+      alert('Erreur upload photo. Réessaie.');
     }
     setIsUploading(false);
   };
@@ -48,7 +47,7 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
       await navigator.share(shareData);
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert("Lien copié ! Partage-le avec tes amis.");
+      alert("Lien copié !");
     }
   };
 
@@ -87,10 +86,8 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
           />
         </div>
 
-        <button
-          onClick={handleShareApp}
-          className="w-full py-4 bg-gradient-to-r from-red-600 to-green-600 text-white rounded-2xl font-bold shadow-lg hover:shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2"
-        >
+        <button onClick={handleShareApp}
+          className="w-full py-4 bg-gradient-to-r from-red-600 to-green-600 text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
           <i className="fa-solid fa-share-nodes"></i>
           INVITER DES AMIS SUR URUKUNDO
         </button>
@@ -115,10 +112,8 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
             <span className="text-sm text-gray-700">Centre de sécurité</span>
             <i className="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
           </div>
-          <button
-            onClick={onSignOut}
-            className="w-full p-4 flex items-center text-red-500 font-medium hover:bg-red-50"
-          >
+          <button onClick={onSignOut}
+            className="w-full p-4 flex items-center text-red-500 font-medium hover:bg-red-50">
             <i className="fa-solid fa-right-from-bracket mr-2"></i>
             Se déconnecter
           </button>
