@@ -17,3 +17,4 @@ export const uploadImage = async (file: File, userId: string): Promise<string> =
   const data = await response.json();
   return data.secure_url;
 };
+// Cloudinary enabled
