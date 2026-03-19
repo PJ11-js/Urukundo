@@ -5,6 +5,7 @@ import { auth, db } from './firebase';
 import { AppScreen, UserProfile, ChatSession } from './types';
 import { getCurrentPosition, calculateDistance } from './services/locationService';
 import LoginScreen from './components/LoginScreen';
+import LegalScreen from './components/LegalScreen';
 import SetupScreen from './components/SetupScreen';
 import DiscoveryScreen from './components/DiscoveryScreen';
 import MessagesScreen from './components/MessagesScreen';
