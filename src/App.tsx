@@ -131,7 +131,7 @@ const App: React.FC = () => {
           <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} />
         )}
       </main>
-      {currentScreen !== AppScreen.CHAT && <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} />}
+      {currentScreen !== AppScreen.CHAT && <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} matches={matches} />}
     </div>
   );
 };
