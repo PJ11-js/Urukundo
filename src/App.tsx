@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { AppScreen, UserProfile, ChatSession } from './types';
 import LoginScreen from './components/LoginScreen';
@@ -9,6 +9,7 @@ import DiscoveryScreen from './components/DiscoveryScreen';
 import MessagesScreen from './components/MessagesScreen';
 import ProfileScreen from './components/ProfileScreen';
 import ChatDetailScreen from './components/ChatDetailScreen';
+import LikesScreen from './components/LikesScreen';
 import BottomNav from './components/BottomNav';
 
 const App: React.FC = () => {
@@ -20,6 +21,7 @@ const App: React.FC = () => {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [matches, setMatches] = useState<ChatSession[]>([]);
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
+  const [likesCount, setLikesCount] = useState(0);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -30,6 +32,7 @@ const App: React.FC = () => {
           setCurrentUser(userDoc.data() as UserProfile);
           setNeedsSetup(false);
           loadProfiles(firebaseUser.uid);
+          loadLikesCount(firebaseUser.uid);
         } else {
           setNeedsSetup(true);
         }
@@ -38,6 +41,14 @@ const App: React.FC = () => {
     });
     return () => unsub();
   }, []);
+
+  const loadLikesCount = async (userId: string) => {
+    try {
+      const q = query(collection(db, 'likes'), where('toUserId', '==', userId));
+      const snapshot = await getDocs(q);
+      setLikesCount(snapshot.size);
+    } catch {}
+  };
 
   const loadProfiles = async (userId: string) => {
     try {
@@ -67,11 +78,21 @@ const App: React.FC = () => {
         setCurrentUser(userDoc.data() as UserProfile);
         setNeedsSetup(false);
         loadProfiles(user.uid);
+        loadLikesCount(user.uid);
       }
     }
   };
 
-  const handleLike = (profile: UserProfile) => {
+  const handleLike = async (profile: UserProfile) => {
+    if (user) {
+      try {
+        await addDoc(collection(db, 'likes'), {
+          fromUserId: user.uid,
+          toUserId: profile.id,
+          timestamp: serverTimestamp(),
+        });
+      } catch {}
+    }
     const isMatch = Math.random() > 0.4;
     if (isMatch) {
       const newSession: ChatSession = {
@@ -91,6 +112,12 @@ const App: React.FC = () => {
   const openChat = (session: ChatSession) => {
     setActiveChat(session);
     setCurrentScreen(AppScreen.CHAT);
+  };
+
+  const handleMatch = (session: ChatSession) => {
+    setMatches(prev => [session, ...prev]);
+    setCurrentScreen(AppScreen.MESSAGES);
+    setLikesCount(prev => Math.max(0, prev - 1));
   };
 
   const handleSignOut = async () => {
@@ -123,15 +150,28 @@ const App: React.FC = () => {
           URUKUNDO <span className="text-gray-300 font-light">| 🇧🇮</span>
         </h1>
       </header>
+
       <main className="flex-1 overflow-y-auto relative bg-gray-50/50">
-        {currentScreen === AppScreen.DISCOVERY && <DiscoveryScreen profiles={profiles} onLike={handleLike} onDislike={handleDislike} />}
-        {currentScreen === AppScreen.MESSAGES && <MessagesScreen matches={matches} onSelectChat={openChat} />}
-        {currentScreen === AppScreen.PROFILE && currentUser && <ProfileScreen user={currentUser} setUser={setCurrentUser} onSignOut={handleSignOut} />}
+        {currentScreen === AppScreen.DISCOVERY && (
+          <DiscoveryScreen profiles={profiles} onLike={handleLike} onDislike={handleDislike} />
+        )}
+        {currentScreen === AppScreen.LIKES && user && currentUser && (
+          <LikesScreen currentUserId={user.uid} currentUserName={currentUser.name} onMatch={handleMatch} />
+        )}
+        {currentScreen === AppScreen.MESSAGES && (
+          <MessagesScreen matches={matches} onSelectChat={openChat} />
+        )}
+        {currentScreen === AppScreen.PROFILE && currentUser && (
+          <ProfileScreen user={currentUser} setUser={setCurrentUser} onSignOut={handleSignOut} />
+        )}
         {currentScreen === AppScreen.CHAT && activeChat && user && (
           <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} />
         )}
       </main>
-      {currentScreen !== AppScreen.CHAT && <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} matches={matches} />}
+
+      {currentScreen !== AppScreen.CHAT && (
+        <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} matches={matches} likesCount={likesCount} />
+      )}
     </div>
   );
 };
