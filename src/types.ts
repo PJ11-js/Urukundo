@@ -28,6 +28,7 @@ export enum AppScreen {
   LOGIN = 'LOGIN',
   SETUP = 'SETUP',
   DISCOVERY = 'DISCOVERY',
+  LIKES = 'LIKES',
   MESSAGES = 'MESSAGES',
   PROFILE = 'PROFILE',
   CHAT = 'CHAT',
