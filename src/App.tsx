@@ -4,6 +4,7 @@ import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp
 import { auth, db } from './firebase';
 import { AppScreen, UserProfile, ChatSession } from './types';
 import { getCurrentPosition, calculateDistance } from './services/locationService';
+import { calculateCompatibility, isMatch } from './services/matchingService';
 import LoginScreen from './components/LoginScreen';
 import LegalScreen from './components/LegalScreen';
 import SetupScreen from './components/SetupScreen';
@@ -14,17 +15,102 @@ import ChatDetailScreen from './components/ChatDetailScreen';
 import LikesScreen from './components/LikesScreen';
 import BottomNav from './components/BottomNav';
 
+const DEMO_PROFILES: UserProfile[] = [
+  {
+    id: 'demo1',
+    name: 'Amina',
+    age: 23,
+    bio: 'Amahoro ! Étudiante en droit à Bujumbura. J\'aime la danse traditionnelle et la culture burundaise. 🇧🇮',
+    location: 'Bujumbura, Burundi',
+    images: ['https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600&h=800&fit=crop&crop=face'],
+    interests: ['Danse', 'Droit', 'Culture', 'Musique'],
+    distance: 2,
+  },
+  {
+    id: 'demo2',
+    name: 'Jean-Pierre',
+    age: 28,
+    bio: 'Ingénieur à Bruxelles, fier Burundais de la diaspora. Je cherche une connexion sincère. Amahoro !',
+    location: 'Bruxelles, Belgique',
+    images: ['https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?w=600&h=800&fit=crop&crop=face'],
+    interests: ['Tech', 'Football', 'Voyage', 'Cuisine'],
+    distance: 150,
+  },
+  {
+    id: 'demo3',
+    name: 'Grace',
+    age: 25,
+    bio: 'Infirmière à Paris. La musique africaine est ma passion. Je cherche quelqu\'un de sincère et respectueux.',
+    location: 'Paris, France',
+    images: ['https://images.unsplash.com/photo-1589156280159-27698a70f29e?w=600&h=800&fit=crop&crop=face'],
+    interests: ['Musique', 'Santé', 'Voyage', 'Mode'],
+    distance: 200,
+  },
+  {
+    id: 'demo4',
+    name: 'Emmanuel',
+    age: 31,
+    bio: 'Entrepreneur à Montréal. Burundais dans l\'âme, citoyen du monde. J\'adore cuisiner les plats burundais.',
+    location: 'Montréal, Canada',
+    images: ['https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=800&fit=crop&crop=face'],
+    interests: ['Business', 'Cuisine', 'Sport', 'Musique'],
+    distance: 500,
+  },
+  {
+    id: 'demo5',
+    name: 'Sandrine',
+    age: 26,
+    bio: 'Comptable à Gitega. Fan de football et de randonnée. Je cherche quelqu\'un de sérieux. 🇧🇮',
+    location: 'Gitega, Burundi',
+    images: ['https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&h=800&fit=crop&crop=face'],
+    interests: ['Football', 'Nature', 'Lecture', 'Voyage'],
+    distance: 45,
+  },
+  {
+    id: 'demo6',
+    name: 'Patrick',
+    age: 29,
+    bio: 'Musicien à Nairobi. Je joue de la guitare et du tam-tam. Amahoro à tous les Burundais du monde !',
+    location: 'Nairobi, Kenya',
+    images: ['https://images.unsplash.com/photo-1522529599102-193c0d76b5b6?w=600&h=800&fit=crop&crop=face'],
+    interests: ['Musique', 'Art', 'Culture', 'Voyage'],
+    distance: 800,
+  },
+  {
+    id: 'demo7',
+    name: 'Clarisse',
+    age: 24,
+    bio: 'Enseignante à Bujumbura. J\'aime partager la culture burundaise et apprendre des autres. 🌍',
+    location: 'Bujumbura, Burundi',
+    images: ['https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=600&h=800&fit=crop&crop=face'],
+    interests: ['Éducation', 'Culture', 'Lecture', 'Danse'],
+    distance: 5,
+  },
+  {
+    id: 'demo8',
+    name: 'Thierry',
+    age: 33,
+    bio: 'Médecin à Londres. Burundais de la diaspora depuis 10 ans. Je cherche une âme sœur burundaise.',
+    location: 'Londres, UK',
+    images: ['https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&h=800&fit=crop&crop=face'],
+    interests: ['Santé', 'Sport', 'Voyage', 'Cinéma'],
+    distance: 300,
+  },
+];
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [hasAcceptedLegal, setHasAcceptedLegal] = useState(
+    localStorage.getItem('urukundo_legal_accepted') === 'true'
+  );
   const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.DISCOVERY);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [matches, setMatches] = useState<ChatSession[]>([]);
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [likesCount, setLikesCount] = useState(0);
-  const [myCoords, setMyCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -48,11 +134,7 @@ const App: React.FC = () => {
   const updateUserLocation = async (userId: string) => {
     try {
       const coords = await getCurrentPosition();
-      setMyCoords(coords);
-      await updateDoc(doc(db, 'users', userId), {
-        lat: coords.lat,
-        lng: coords.lng,
-      });
+      await updateDoc(doc(db, 'users', userId), { lat: coords.lat, lng: coords.lng });
       loadProfiles(userId, coords);
     } catch {
       loadProfiles(userId, null);
@@ -63,19 +145,22 @@ const App: React.FC = () => {
     try {
       const q = query(collection(db, 'users'), where('id', '!=', userId));
       const snapshot = await getDocs(q);
-      let users: UserProfile[] = [];
+      let realUsers: UserProfile[] = [];
       snapshot.forEach(d => {
         const data = d.data() as UserProfile & { lat?: number; lng?: number };
         let distance: number | undefined;
         if (coords && data.lat && data.lng) {
           distance = calculateDistance(coords.lat, coords.lng, data.lat, data.lng);
         }
-        users.push({ ...data, distance });
+        realUsers.push({ ...data, distance });
       });
-      users.sort((a, b) => (a.distance || 9999) - (b.distance || 9999));
-      setProfiles(users.length > 0 ? users : getFallbackProfiles());
+      realUsers.sort((a, b) => (a.distance || 9999) - (b.distance || 9999));
+      const allProfiles = realUsers.length > 0
+        ? [...realUsers, ...DEMO_PROFILES.filter(d => !realUsers.find(r => r.id === d.id))]
+        : DEMO_PROFILES;
+      setProfiles(allProfiles);
     } catch {
-      setProfiles(getFallbackProfiles());
+      setProfiles(DEMO_PROFILES);
     }
   };
 
@@ -86,15 +171,6 @@ const App: React.FC = () => {
       setLikesCount(snapshot.size);
     } catch {}
   };
-
-  const getFallbackProfiles = (): UserProfile[] => [
-    { id: '1', name: 'Inès', age: 24, bio: 'Amahoro ! Looking for someone to explore Lake Tanganyika with.', location: 'Bujumbura', images: ['https://i.pravatar.cc/600?img=47'], interests: ['Danse', 'Plage', 'Culture'], distance: 2 },
-    { id: '2', name: 'Fabrice', age: 28, bio: 'Chef cuisinier à Gitega.', location: 'Gitega', images: ['https://i.pravatar.cc/600?img=68'], interests: ['Cuisine', 'Art', 'Voyage'], distance: 45 },
-    { id: '3', name: 'Bella', age: 22, bio: 'Étudiante à Bujumbura. La musique est ma vie !', location: 'Bujumbura', images: ['https://i.pravatar.cc/600?img=44'], interests: ['Musique', 'Randonnée', 'Social'], distance: 5 },
-    { id: '4', name: 'Arnaud', age: 31, bio: 'Entrepreneur à Paris.', location: 'Paris', images: ['https://i.pravatar.cc/600?img=51'], interests: ['Business', 'Sport', 'Tech'], distance: 120 },
-    { id: '5', name: 'Diane', age: 26, bio: 'Infirmière à Bruxelles.', location: 'Bruxelles', images: ['https://i.pravatar.cc/600?img=48'], interests: ['Santé', 'Voyage', 'Lecture'], distance: 200 },
-    { id: '6', name: 'Patrick', age: 30, bio: 'Développeur web à Montréal.', location: 'Montréal', images: ['https://i.pravatar.cc/600?img=56'], interests: ['Tech', 'Football', 'Cinéma'], distance: 300 },
-  ];
 
   const handleProfileSetupComplete = async () => {
     if (user) {
@@ -118,7 +194,7 @@ const App: React.FC = () => {
         });
       } catch {}
     }
-    const compatibility = calculateCompatibility(currentUser!, profile);
+    const compatibility = currentUser ? calculateCompatibility(currentUser, profile) : 50;
     const matched = isMatch(compatibility);
     if (matched) {
       const newSession: ChatSession = {
@@ -154,6 +230,11 @@ const App: React.FC = () => {
     setMatches([]);
   };
 
+  const handleAcceptLegal = () => {
+    localStorage.setItem('urukundo_legal_accepted', 'true');
+    setHasAcceptedLegal(true);
+  };
+
   if (authLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-white">
@@ -166,6 +247,7 @@ const App: React.FC = () => {
     );
   }
 
+  if (!hasAcceptedLegal) return <LegalScreen onAccept={handleAcceptLegal} />;
   if (!user) return <LoginScreen />;
   if (needsSetup) return <SetupScreen userId={user.uid} displayName={user.displayName || ''} photoURL={user.photoURL || ''} onComplete={handleProfileSetupComplete} />;
 
