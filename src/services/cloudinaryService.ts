@@ -6,7 +6,7 @@ export const uploadImage = async (file: File, userId: string): Promise<string> =
   formData.append('file', file);
   formData.append('upload_preset', UPLOAD_PRESET);
   formData.append('folder', `urukundo/profiles/${userId}`);
-  formData.append('public_id', `profile_${userId}`);
+  formData.append('public_id', `photo_${userId}_${Date.now()}`);
 
   const response = await fetch(
     `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
@@ -17,4 +17,3 @@ export const uploadImage = async (file: File, userId: string): Promise<string> =
   const data = await response.json();
   return data.secure_url;
 };
-// Cloudinary enabled
