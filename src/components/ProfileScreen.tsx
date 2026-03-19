@@ -31,7 +31,7 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
         newUrls.push(url);
       }
       const updatedImages = [...user.images, ...newUrls];
-      await updateDoc(doc(db, 'users', user.id), { images: updatedImages });
+      await updateDoc(doc(db, 'users', user.id), { images: updatedImages, photoURL: updatedImages[0] || '' });
       setUser(prev => prev ? { ...prev, images: updatedImages } : null);
     } catch { alert('Erreur upload.'); }
     setIsUploading(false);
@@ -39,7 +39,7 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
 
   const handleRemovePhoto = async (index: number) => {
     const updatedImages = user.images.filter((_, i) => i !== index);
-    await updateDoc(doc(db, 'users', user.id), { images: updatedImages });
+    await updateDoc(doc(db, 'users', user.id), { images: updatedImages, photoURL: updatedImages[0] || '' });
     setUser(prev => prev ? { ...prev, images: updatedImages } : null);
     setActivePhoto(0);
   };
