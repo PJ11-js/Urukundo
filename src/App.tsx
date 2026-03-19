@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { AppScreen, UserProfile, ChatSession, Message } from './types';
+import { AppScreen, UserProfile, ChatSession } from './types';
 import LoginScreen from './components/LoginScreen';
 import SetupScreen from './components/SetupScreen';
 import DiscoveryScreen from './components/DiscoveryScreen';
@@ -53,10 +53,10 @@ const App: React.FC = () => {
 
   const getFallbackProfiles = (): UserProfile[] => [
     { id: '1', name: 'Inès', age: 24, bio: 'Amahoro ! Looking for someone to explore Lake Tanganyika with.', location: 'Bujumbura', images: ['https://i.pravatar.cc/600?img=47'], interests: ['Danse', 'Plage', 'Culture'], distance: 2 },
-    { id: '2', name: 'Fabrice', age: 28, bio: 'Chef cuisinier à Gitega. La cuisine burundaise est ma passion !', location: 'Gitega', images: ['https://i.pravatar.cc/600?img=68'], interests: ['Cuisine', 'Art', 'Voyage'], distance: 45 },
+    { id: '2', name: 'Fabrice', age: 28, bio: 'Chef cuisinier à Gitega.', location: 'Gitega', images: ['https://i.pravatar.cc/600?img=68'], interests: ['Cuisine', 'Art', 'Voyage'], distance: 45 },
     { id: '3', name: 'Bella', age: 22, bio: 'Étudiante à Bujumbura. La musique est ma vie !', location: 'Bujumbura', images: ['https://i.pravatar.cc/600?img=44'], interests: ['Musique', 'Randonnée', 'Social'], distance: 5 },
-    { id: '4', name: 'Arnaud', age: 31, bio: 'Entrepreneur. Je travaille dur mais je profite de la vie !', location: 'Paris', images: ['https://i.pravatar.cc/600?img=51'], interests: ['Business', 'Sport', 'Tech'], distance: 120 },
-    { id: '5', name: 'Diane', age: 26, bio: 'Infirmière à Bruxelles. Fière Burundaise de la diaspora !', location: 'Bruxelles', images: ['https://i.pravatar.cc/600?img=48'], interests: ['Santé', 'Voyage', 'Lecture'], distance: 200 },
+    { id: '4', name: 'Arnaud', age: 31, bio: 'Entrepreneur à Paris. Fier Burundais !', location: 'Paris', images: ['https://i.pravatar.cc/600?img=51'], interests: ['Business', 'Sport', 'Tech'], distance: 120 },
+    { id: '5', name: 'Diane', age: 26, bio: 'Infirmière à Bruxelles.', location: 'Bruxelles', images: ['https://i.pravatar.cc/600?img=48'], interests: ['Santé', 'Voyage', 'Lecture'], distance: 200 },
     { id: '6', name: 'Patrick', age: 30, bio: 'Développeur web à Montréal. Amahoro !', location: 'Montréal', images: ['https://i.pravatar.cc/600?img=56'], interests: ['Tech', 'Football', 'Cinéma'], distance: 300 },
   ];
 
@@ -93,20 +93,6 @@ const App: React.FC = () => {
     setCurrentScreen(AppScreen.CHAT);
   };
 
-  const sendMessage = (text: string) => {
-    if (!activeChat) return;
-    const newMessage: Message = { id: `msg-${Date.now()}`, senderId: 'me', text, timestamp: Date.now() };
-    const updatedMatches = matches.map(m => {
-      if (m.id === activeChat.id) {
-        const updated = { ...m, messages: [...m.messages, newMessage] };
-        setActiveChat(updated);
-        return updated;
-      }
-      return m;
-    });
-    setMatches(updatedMatches);
-  };
-
   const handleSignOut = async () => {
     await signOut(auth);
     setUser(null);
@@ -128,17 +114,7 @@ const App: React.FC = () => {
   }
 
   if (!user) return <LoginScreen />;
-
-  if (needsSetup) {
-    return (
-      <SetupScreen
-        userId={user.uid}
-        displayName={user.displayName || ''}
-        photoURL={user.photoURL || ''}
-        onComplete={handleProfileSetupComplete}
-      />
-    );
-  }
+  if (needsSetup) return <SetupScreen userId={user.uid} displayName={user.displayName || ''} photoURL={user.photoURL || ''} onComplete={handleProfileSetupComplete} />;
 
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-white shadow-2xl relative overflow-hidden border-x border-gray-100">
@@ -146,29 +122,16 @@ const App: React.FC = () => {
         <h1 className="text-2xl font-black tracking-tighter" style={{ color: '#ce1126' }}>
           URUKUNDO <span className="text-gray-300 font-light">| 🇧🇮</span>
         </h1>
-        <button className="text-gray-400 hover:text-gray-600 transition-colors">
-          <i className="fa-solid fa-sliders text-xl"></i>
-        </button>
       </header>
-
       <main className="flex-1 overflow-y-auto relative bg-gray-50/50">
-        {currentScreen === AppScreen.DISCOVERY && (
-          <DiscoveryScreen profiles={profiles} onLike={handleLike} onDislike={handleDislike} />
-        )}
-        {currentScreen === AppScreen.MESSAGES && (
-          <MessagesScreen matches={matches} onSelectChat={openChat} />
-        )}
-        {currentScreen === AppScreen.PROFILE && currentUser && (
-          <ProfileScreen user={currentUser} setUser={setCurrentUser} onSignOut={handleSignOut} />
-        )}
-        {currentScreen === AppScreen.CHAT && activeChat && (
-          <ChatDetailScreen session={activeChat} onSendMessage={sendMessage} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} />
+        {currentScreen === AppScreen.DISCOVERY && <DiscoveryScreen profiles={profiles} onLike={handleLike} onDislike={handleDislike} />}
+        {currentScreen === AppScreen.MESSAGES && <MessagesScreen matches={matches} onSelectChat={openChat} />}
+        {currentScreen === AppScreen.PROFILE && currentUser && <ProfileScreen user={currentUser} setUser={setCurrentUser} onSignOut={handleSignOut} />}
+        {currentScreen === AppScreen.CHAT && activeChat && user && (
+          <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} />
         )}
       </main>
-
-      {currentScreen !== AppScreen.CHAT && (
-        <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} />
-      )}
+      {currentScreen !== AppScreen.CHAT && <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} />}
     </div>
   );
 };
