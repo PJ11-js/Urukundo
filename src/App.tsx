@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { AppScreen, UserProfile, ChatSession } from './types';
+import { getCurrentPosition, calculateDistance } from './services/locationService';
 import LoginScreen from './components/LoginScreen';
 import SetupScreen from './components/SetupScreen';
 import DiscoveryScreen from './components/DiscoveryScreen';
@@ -22,6 +23,7 @@ const App: React.FC = () => {
   const [matches, setMatches] = useState<ChatSession[]>([]);
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [likesCount, setLikesCount] = useState(0);
+  const [myCoords, setMyCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -31,8 +33,8 @@ const App: React.FC = () => {
         if (userDoc.exists()) {
           setCurrentUser(userDoc.data() as UserProfile);
           setNeedsSetup(false);
-          loadProfiles(firebaseUser.uid);
           loadLikesCount(firebaseUser.uid);
+          updateUserLocation(firebaseUser.uid);
         } else {
           setNeedsSetup(true);
         }
@@ -42,6 +44,40 @@ const App: React.FC = () => {
     return () => unsub();
   }, []);
 
+  const updateUserLocation = async (userId: string) => {
+    try {
+      const coords = await getCurrentPosition();
+      setMyCoords(coords);
+      await updateDoc(doc(db, 'users', userId), {
+        lat: coords.lat,
+        lng: coords.lng,
+      });
+      loadProfiles(userId, coords);
+    } catch {
+      loadProfiles(userId, null);
+    }
+  };
+
+  const loadProfiles = async (userId: string, coords: { lat: number; lng: number } | null) => {
+    try {
+      const q = query(collection(db, 'users'), where('id', '!=', userId));
+      const snapshot = await getDocs(q);
+      let users: UserProfile[] = [];
+      snapshot.forEach(d => {
+        const data = d.data() as UserProfile & { lat?: number; lng?: number };
+        let distance: number | undefined;
+        if (coords && data.lat && data.lng) {
+          distance = calculateDistance(coords.lat, coords.lng, data.lat, data.lng);
+        }
+        users.push({ ...data, distance });
+      });
+      users.sort((a, b) => (a.distance || 9999) - (b.distance || 9999));
+      setProfiles(users.length > 0 ? users : getFallbackProfiles());
+    } catch {
+      setProfiles(getFallbackProfiles());
+    }
+  };
+
   const loadLikesCount = async (userId: string) => {
     try {
       const q = query(collection(db, 'likes'), where('toUserId', '==', userId));
@@ -50,25 +86,13 @@ const App: React.FC = () => {
     } catch {}
   };
 
-  const loadProfiles = async (userId: string) => {
-    try {
-      const q = query(collection(db, 'users'), where('id', '!=', userId));
-      const snapshot = await getDocs(q);
-      const users: UserProfile[] = [];
-      snapshot.forEach(doc => users.push(doc.data() as UserProfile));
-      setProfiles(users.length > 0 ? users : getFallbackProfiles());
-    } catch {
-      setProfiles(getFallbackProfiles());
-    }
-  };
-
   const getFallbackProfiles = (): UserProfile[] => [
     { id: '1', name: 'Inès', age: 24, bio: 'Amahoro ! Looking for someone to explore Lake Tanganyika with.', location: 'Bujumbura', images: ['https://i.pravatar.cc/600?img=47'], interests: ['Danse', 'Plage', 'Culture'], distance: 2 },
     { id: '2', name: 'Fabrice', age: 28, bio: 'Chef cuisinier à Gitega.', location: 'Gitega', images: ['https://i.pravatar.cc/600?img=68'], interests: ['Cuisine', 'Art', 'Voyage'], distance: 45 },
     { id: '3', name: 'Bella', age: 22, bio: 'Étudiante à Bujumbura. La musique est ma vie !', location: 'Bujumbura', images: ['https://i.pravatar.cc/600?img=44'], interests: ['Musique', 'Randonnée', 'Social'], distance: 5 },
-    { id: '4', name: 'Arnaud', age: 31, bio: 'Entrepreneur à Paris. Fier Burundais !', location: 'Paris', images: ['https://i.pravatar.cc/600?img=51'], interests: ['Business', 'Sport', 'Tech'], distance: 120 },
+    { id: '4', name: 'Arnaud', age: 31, bio: 'Entrepreneur à Paris.', location: 'Paris', images: ['https://i.pravatar.cc/600?img=51'], interests: ['Business', 'Sport', 'Tech'], distance: 120 },
     { id: '5', name: 'Diane', age: 26, bio: 'Infirmière à Bruxelles.', location: 'Bruxelles', images: ['https://i.pravatar.cc/600?img=48'], interests: ['Santé', 'Voyage', 'Lecture'], distance: 200 },
-    { id: '6', name: 'Patrick', age: 30, bio: 'Développeur web à Montréal. Amahoro !', location: 'Montréal', images: ['https://i.pravatar.cc/600?img=56'], interests: ['Tech', 'Football', 'Cinéma'], distance: 300 },
+    { id: '6', name: 'Patrick', age: 30, bio: 'Développeur web à Montréal.', location: 'Montréal', images: ['https://i.pravatar.cc/600?img=56'], interests: ['Tech', 'Football', 'Cinéma'], distance: 300 },
   ];
 
   const handleProfileSetupComplete = async () => {
@@ -77,8 +101,8 @@ const App: React.FC = () => {
       if (userDoc.exists()) {
         setCurrentUser(userDoc.data() as UserProfile);
         setNeedsSetup(false);
-        loadProfiles(user.uid);
         loadLikesCount(user.uid);
+        updateUserLocation(user.uid);
       }
     }
   };
