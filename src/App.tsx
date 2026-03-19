@@ -117,8 +117,9 @@ const App: React.FC = () => {
         });
       } catch {}
     }
-    const isMatch = Math.random() > 0.4;
-    if (isMatch) {
+    const compatibility = calculateCompatibility(currentUser!, profile);
+    const matched = isMatch(compatibility);
+    if (matched) {
       const newSession: ChatSession = {
         id: `session-${Date.now()}`,
         partner: profile,
