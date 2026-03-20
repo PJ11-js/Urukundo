@@ -16,86 +16,14 @@ import LikesScreen from './components/LikesScreen';
 import BottomNav from './components/BottomNav';
 
 const DEMO_PROFILES: UserProfile[] = [
-  {
-    id: 'demo1',
-    name: 'Amina',
-    age: 23,
-    bio: 'Amahoro ! Étudiante en droit à Bujumbura. J\'aime la danse traditionnelle et la culture burundaise. 🇧🇮',
-    location: 'Bujumbura, Burundi',
-    images: ['https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600&h=800&fit=crop&crop=face'],
-    interests: ['Danse', 'Droit', 'Culture', 'Musique'],
-    distance: 2,
-  },
-  {
-    id: 'demo2',
-    name: 'Jean-Pierre',
-    age: 28,
-    bio: 'Ingénieur à Bruxelles, fier Burundais de la diaspora. Je cherche une connexion sincère. Amahoro !',
-    location: 'Bruxelles, Belgique',
-    images: ['https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?w=600&h=800&fit=crop&crop=face'],
-    interests: ['Tech', 'Football', 'Voyage', 'Cuisine'],
-    distance: 150,
-  },
-  {
-    id: 'demo3',
-    name: 'Grace',
-    age: 25,
-    bio: 'Infirmière à Paris. La musique africaine est ma passion. Je cherche quelqu\'un de sincère et respectueux.',
-    location: 'Paris, France',
-    images: ['https://images.unsplash.com/photo-1589156280159-27698a70f29e?w=600&h=800&fit=crop&crop=face'],
-    interests: ['Musique', 'Santé', 'Voyage', 'Mode'],
-    distance: 200,
-  },
-  {
-    id: 'demo4',
-    name: 'Emmanuel',
-    age: 31,
-    bio: 'Entrepreneur à Montréal. Burundais dans l\'âme, citoyen du monde. J\'adore cuisiner les plats burundais.',
-    location: 'Montréal, Canada',
-    images: ['https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=800&fit=crop&crop=face'],
-    interests: ['Business', 'Cuisine', 'Sport', 'Musique'],
-    distance: 500,
-  },
-  {
-    id: 'demo5',
-    name: 'Sandrine',
-    age: 26,
-    bio: 'Comptable à Gitega. Fan de football et de randonnée. Je cherche quelqu\'un de sérieux. 🇧🇮',
-    location: 'Gitega, Burundi',
-    images: ['https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&h=800&fit=crop&crop=face'],
-    interests: ['Football', 'Nature', 'Lecture', 'Voyage'],
-    distance: 45,
-  },
-  {
-    id: 'demo6',
-    name: 'Patrick',
-    age: 29,
-    bio: 'Musicien à Nairobi. Je joue de la guitare et du tam-tam. Amahoro à tous les Burundais du monde !',
-    location: 'Nairobi, Kenya',
-    images: ['https://images.unsplash.com/photo-1522529599102-193c0d76b5b6?w=600&h=800&fit=crop&crop=face'],
-    interests: ['Musique', 'Art', 'Culture', 'Voyage'],
-    distance: 800,
-  },
-  {
-    id: 'demo7',
-    name: 'Clarisse',
-    age: 24,
-    bio: 'Enseignante à Bujumbura. J\'aime partager la culture burundaise et apprendre des autres. 🌍',
-    location: 'Bujumbura, Burundi',
-    images: ['https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=600&h=800&fit=crop&crop=face'],
-    interests: ['Éducation', 'Culture', 'Lecture', 'Danse'],
-    distance: 5,
-  },
-  {
-    id: 'demo8',
-    name: 'Thierry',
-    age: 33,
-    bio: 'Médecin à Londres. Burundais de la diaspora depuis 10 ans. Je cherche une âme sœur burundaise.',
-    location: 'Londres, UK',
-    images: ['https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&h=800&fit=crop&crop=face'],
-    interests: ['Santé', 'Sport', 'Voyage', 'Cinéma'],
-    distance: 300,
-  },
+  { id: 'demo1', name: 'Amina', age: 23, bio: 'Amahoro ! Étudiante en droit à Bujumbura. J\'aime la danse traditionnelle. 🇧🇮', location: 'Bujumbura, Burundi', images: ['https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600&h=800&fit=crop&crop=face'], interests: ['Danse', 'Droit', 'Culture', 'Musique'], distance: 2 },
+  { id: 'demo2', name: 'Jean-Pierre', age: 28, bio: 'Ingénieur à Bruxelles, fier Burundais de la diaspora.', location: 'Bruxelles, Belgique', images: ['https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?w=600&h=800&fit=crop&crop=face'], interests: ['Tech', 'Football', 'Voyage', 'Cuisine'], distance: 150 },
+  { id: 'demo3', name: 'Grace', age: 25, bio: 'Infirmière à Paris. La musique africaine est ma passion.', location: 'Paris, France', images: ['https://images.unsplash.com/photo-1589156280159-27698a70f29e?w=600&h=800&fit=crop&crop=face'], interests: ['Musique', 'Santé', 'Voyage', 'Mode'], distance: 200 },
+  { id: 'demo4', name: 'Emmanuel', age: 31, bio: 'Entrepreneur à Montréal. Burundais dans l\'âme.', location: 'Montréal, Canada', images: ['https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=800&fit=crop&crop=face'], interests: ['Business', 'Cuisine', 'Sport', 'Musique'], distance: 500 },
+  { id: 'demo5', name: 'Sandrine', age: 26, bio: 'Comptable à Gitega. Fan de football et de randonnée. 🇧🇮', location: 'Gitega, Burundi', images: ['https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&h=800&fit=crop&crop=face'], interests: ['Football', 'Nature', 'Lecture', 'Voyage'], distance: 45 },
+  { id: 'demo6', name: 'Patrick', age: 29, bio: 'Musicien à Nairobi. Amahoro à tous les Burundais du monde !', location: 'Nairobi, Kenya', images: ['https://images.unsplash.com/photo-1522529599102-193c0d76b5b6?w=600&h=800&fit=crop&crop=face'], interests: ['Musique', 'Art', 'Culture', 'Voyage'], distance: 800 },
+  { id: 'demo7', name: 'Clarisse', age: 24, bio: 'Enseignante à Bujumbura. J\'aime partager la culture burundaise.', location: 'Bujumbura, Burundi', images: ['https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=600&h=800&fit=crop&crop=face'], interests: ['Éducation', 'Culture', 'Lecture', 'Danse'], distance: 5 },
+  { id: 'demo8', name: 'Thierry', age: 33, bio: 'Médecin à Londres. Je cherche une âme sœur burundaise.', location: 'Londres, UK', images: ['https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&h=800&fit=crop&crop=face'], interests: ['Santé', 'Sport', 'Voyage', 'Cinéma'], distance: 300 },
 ];
 
 const App: React.FC = () => {
@@ -143,11 +71,12 @@ const App: React.FC = () => {
 
   const loadProfiles = async (userId: string, coords: { lat: number; lng: number } | null) => {
     try {
-      const q = query(collection(db, 'users'), where('id', '!=', userId));
-      const snapshot = await getDocs(q);
+      // Charge TOUS les utilisateurs puis filtre côté client — évite le problème d'index Firestore
+      const snapshot = await getDocs(collection(db, 'users'));
       let realUsers: UserProfile[] = [];
       snapshot.forEach(d => {
         const data = d.data() as UserProfile & { lat?: number; lng?: number };
+        if (data.id === userId) return; // exclure soi-même
         let distance: number | undefined;
         if (coords && data.lat && data.lng) {
           distance = calculateDistance(coords.lat, coords.lng, data.lat, data.lng);
@@ -155,11 +84,11 @@ const App: React.FC = () => {
         realUsers.push({ ...data, distance });
       });
       realUsers.sort((a, b) => (a.distance || 9999) - (b.distance || 9999));
-      const allProfiles = realUsers.length > 0
-        ? [...realUsers, ...DEMO_PROFILES.filter(d => !realUsers.find(r => r.id === d.id))]
-        : DEMO_PROFILES;
-      setProfiles(allProfiles);
-    } catch {
+      // Mélange vrais utilisateurs + démos (démos à la fin)
+      const demoFiltered = DEMO_PROFILES.filter(d => !realUsers.find(r => r.id === d.id));
+      setProfiles([...realUsers, ...demoFiltered]);
+    } catch (err) {
+      console.error('Erreur chargement profils:', err);
       setProfiles(DEMO_PROFILES);
     }
   };
@@ -192,8 +121,27 @@ const App: React.FC = () => {
           toUserId: profile.id,
           timestamp: serverTimestamp(),
         });
+        // Vérifie si l'autre a déjà liké → match automatique !
+        const q = query(
+          collection(db, 'likes'),
+          where('fromUserId', '==', profile.id),
+          where('toUserId', '==', user.uid)
+        );
+        const existing = await getDocs(q);
+        if (!existing.empty) {
+          // C'est un vrai match mutuel !
+          const newSession: ChatSession = {
+            id: `session-${Date.now()}`,
+            partner: profile,
+            messages: [{ id: 'm1', senderId: profile.id, text: `C'est un match ! Amahoro ${currentUser?.name} ! 🇧🇮`, timestamp: Date.now() }],
+          };
+          setMatches(prev => [newSession, ...prev]);
+          setProfiles(prev => prev.filter(p => p.id !== profile.id));
+          return;
+        }
       } catch {}
     }
+    // Pour les profils démo — matching intelligent
     const compatibility = currentUser ? calculateCompatibility(currentUser, profile) : 50;
     const matched = isMatch(compatibility);
     if (matched) {
@@ -209,6 +157,11 @@ const App: React.FC = () => {
 
   const handleDislike = (profileId: string) => {
     setProfiles(prev => prev.filter(p => p.id !== profileId));
+  };
+
+  const handleUndo = () => {
+    // Retour arrière — recharge les profils
+    if (user) updateUserLocation(user.uid);
   };
 
   const openChat = (session: ChatSession) => {
@@ -261,7 +214,7 @@ const App: React.FC = () => {
 
       <main className="flex-1 overflow-y-auto relative bg-gray-50/50">
         {currentScreen === AppScreen.DISCOVERY && (
-          <DiscoveryScreen profiles={profiles} onLike={handleLike} onDislike={handleDislike} />
+          <DiscoveryScreen profiles={profiles} onLike={handleLike} onDislike={handleDislike} onUndo={handleUndo} />
         )}
         {currentScreen === AppScreen.LIKES && user && currentUser && (
           <LikesScreen currentUserId={user.uid} currentUserName={currentUser.name} onMatch={handleMatch} />

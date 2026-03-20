@@ -5,9 +5,10 @@ interface Props {
   profiles: UserProfile[];
   onLike: (profile: UserProfile) => void;
   onDislike: (id: string) => void;
+  onUndo: () => void;
 }
 
-const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike }) => {
+const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo }) => {
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
@@ -21,6 +22,10 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike }) => {
         </div>
         <h3 className="text-xl font-semibold text-gray-800">Plus de profils</h3>
         <p className="text-gray-500 mt-2">Reviens plus tard !</p>
+        <button onClick={onUndo}
+          className="mt-6 px-6 py-3 rounded-full border-2 border-red-500 text-red-500 font-medium flex items-center gap-2">
+          <i className="fa-solid fa-rotate-left"></i> Recharger
+        </button>
       </div>
     );
   }
@@ -40,13 +45,8 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike }) => {
 
   const handleEnd = () => {
     setIsDragging(false);
-    if (dragX > 100) {
-      onLike(currentProfile);
-      setActivePhoto(0);
-    } else if (dragX < -100) {
-      onDislike(currentProfile.id);
-      setActivePhoto(0);
-    }
+    if (dragX > 100) { onLike(currentProfile); setActivePhoto(0); }
+    else if (dragX < -100) { onDislike(currentProfile.id); setActivePhoto(0); }
     setDragX(0);
   };
 
@@ -54,11 +54,8 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike }) => {
     if (Math.abs(dragX) > 5) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    if (x > rect.width / 2) {
-      setActivePhoto(p => Math.min(photos.length - 1, p + 1));
-    } else {
-      setActivePhoto(p => Math.max(0, p - 1));
-    }
+    if (x > rect.width / 2) setActivePhoto(p => Math.min(photos.length - 1, p + 1));
+    else setActivePhoto(p => Math.max(0, p - 1));
   };
 
   const rotation = dragX * 0.08;
@@ -76,12 +73,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike }) => {
         onTouchMove={e => handleMove(e.touches[0].clientX)}
         onTouchEnd={handleEnd}>
 
-        <div
-          style={{
-            transform: `translateX(${dragX}px) rotate(${rotation}deg)`,
-            transition: isDragging ? 'none' : 'transform 0.3s ease',
-            cursor: isDragging ? 'grabbing' : 'grab',
-          }}
+        <div style={{ transform: `translateX(${dragX}px) rotate(${rotation}deg)`, transition: isDragging ? 'none' : 'transform 0.3s ease', cursor: isDragging ? 'grabbing' : 'grab' }}
           className="absolute inset-0 rounded-3xl overflow-hidden shadow-xl bg-white"
           onClick={handlePhotoTap}>
 
@@ -93,7 +85,6 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike }) => {
             </div>
           )}
 
-          {/* Indicateurs photos */}
           {photos.length > 1 && (
             <div className="absolute top-3 left-0 right-0 flex justify-center gap-1 px-4">
               {photos.map((_, i) => (
@@ -102,17 +93,8 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike }) => {
             </div>
           )}
 
-          {/* LIKE overlay */}
-          <div style={{ opacity: likeOpacity }}
-            className="absolute top-8 left-6 border-4 border-green-400 text-green-400 px-4 py-1 rounded-xl rotate-[-20deg] text-2xl font-black pointer-events-none">
-            LIKE 💚
-          </div>
-
-          {/* NOPE overlay */}
-          <div style={{ opacity: nopeOpacity }}
-            className="absolute top-8 right-6 border-4 border-red-400 text-red-400 px-4 py-1 rounded-xl rotate-[20deg] text-2xl font-black pointer-events-none">
-            NOPE ❌
-          </div>
+          <div style={{ opacity: likeOpacity }} className="absolute top-8 left-6 border-4 border-green-400 text-green-400 px-4 py-1 rounded-xl rotate-[-20deg] text-2xl font-black pointer-events-none">LIKE 💚</div>
+          <div style={{ opacity: nopeOpacity }} className="absolute top-8 right-6 border-4 border-red-400 text-red-400 px-4 py-1 rounded-xl rotate-[20deg] text-2xl font-black pointer-events-none">NOPE ❌</div>
 
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-6 text-white pointer-events-none">
             <div className="flex items-baseline gap-2">
@@ -123,7 +105,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike }) => {
             </div>
             <div className="flex items-center gap-2 mt-1 opacity-90">
               <i className="fa-solid fa-location-dot"></i>
-              <span>{currentProfile.location}{currentProfile.distance ? ` • ${currentProfile.distance} km` : ''}</span>
+              <span>{currentProfile.location}{currentProfile.distance !== undefined ? ` • ${currentProfile.distance} km` : ''}</span>
             </div>
             <p className="mt-2 text-sm line-clamp-2 opacity-80">{currentProfile.bio}</p>
             <div className="flex flex-wrap gap-2 mt-3">
@@ -135,19 +117,28 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike }) => {
         </div>
       </div>
 
-      <div className="flex justify-center items-center gap-6 py-6">
+      <div className="flex justify-center items-center gap-4 py-6">
+        {/* Bouton retour arrière */}
+        <button onClick={onUndo}
+          className="w-12 h-12 rounded-full border-2 border-yellow-100 text-yellow-500 flex items-center justify-center shadow-md bg-white hover:scale-110 transition-transform">
+          <i className="fa-solid fa-rotate-left text-lg"></i>
+        </button>
+
         <button onClick={() => { onDislike(currentProfile.id); setActivePhoto(0); }}
           className="w-16 h-16 rounded-full border-2 border-red-100 text-red-500 flex items-center justify-center shadow-lg bg-white hover:scale-110 transition-transform active:scale-95">
           <i className="fa-solid fa-xmark text-2xl"></i>
         </button>
+
         <button className="w-12 h-12 rounded-full border-2 border-purple-100 text-purple-500 flex items-center justify-center shadow-md bg-white hover:scale-110 transition-transform">
           <i className="fa-solid fa-star text-lg"></i>
         </button>
+
         <button onClick={() => { onLike(currentProfile); setActivePhoto(0); }}
           className="w-16 h-16 rounded-full border-2 border-green-100 text-green-500 flex items-center justify-center shadow-lg bg-white hover:scale-110 transition-transform active:scale-95">
           <i className="fa-solid fa-heart text-2xl"></i>
         </button>
-        <button className="w-12 h-12 rounded-full border-2 border-yellow-100 text-yellow-500 flex items-center justify-center shadow-md bg-white hover:scale-110 transition-transform">
+
+        <button className="w-12 h-12 rounded-full border-2 border-orange-100 text-orange-500 flex items-center justify-center shadow-md bg-white hover:scale-110 transition-transform">
           <i className="fa-solid fa-bolt text-lg"></i>
         </button>
       </div>
