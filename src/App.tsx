@@ -97,10 +97,9 @@ const App: React.FC = () => {
       realUsers.sort((a, b) => (a.distance || 9999) - (b.distance || 9999));
 
       // Filtre par genre — hétérosexuel
-      const lookingForGender = myGender === "homme" ? "femme" : "homme";
-      const lookingForGender = myGender === 'homme' ? 'femme' : 'homme';
-      const filteredReal = realUsers.filter(u => !u.gender || u.gender === lookingForGender);
-      const filteredDemo = DEMO_PROFILES.filter(d => d.gender === lookingForGender);
+      const lookingForGender = myGender === "homme" ? "femme" : myGender === "femme" ? "homme" : null;
+      const filteredReal = lookingForGender ? realUsers.filter(u => !u.gender || u.gender === lookingForGender) : realUsers;
+      const filteredDemo = lookingForGender ? DEMO_PROFILES.filter(d => d.gender === lookingForGender) : DEMO_PROFILES;
 
       setProfiles([...filteredReal, ...filteredDemo]);
     } catch { setProfiles(DEMO_PROFILES); }
