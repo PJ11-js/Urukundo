@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Télécharger Urukundo 🇧🇮</title>
+  <link rel="icon" href="/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="max-w-md mx-auto px-6 py-12 text-center">
+    <img src="/icon-192.png" class="w-24 h-24 rounded-3xl mx-auto mb-4 shadow-lg" />
+    <h1 class="text-3xl font-black text-red-600 mb-1">URUKUNDO 🇧🇮</h1>
+    <p class="text-gray-500 mb-8">L'app de rencontre pour les Burundais du monde entier</p>
+
+    <!-- Android/Chrome -->
+    <div class="bg-white rounded-2xl p-5 shadow-sm mb-4 text-left">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-3xl">🤖</span>
+        <h2 class="font-bold text-gray-800">Android & Desktop</h2>
+      </div>
+      <ol class="space-y-2 text-sm text-gray-600">
+        <li class="flex items-start gap-2"><span class="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0 mt-0.5">1</span>Ouvre <strong>urukundo-2qq5.vercel.app</strong> dans Chrome</li>
+        <li class="flex items-start gap-2"><span class="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0 mt-0.5">2</span>Clique les <strong>3 points ⋮</strong> en haut à droite</li>
+        <li class="flex items-start gap-2"><span class="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0 mt-0.5">3</span>Clique <strong>"Installer Urukundo"</strong></li>
+        <li class="flex items-start gap-2"><span class="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0 mt-0.5">4</span>L'app s'installe sur ton écran d'accueil ✅</li>
+      </ol>
+    </div>
+
+    <!-- iPhone -->
+    <div class="bg-white rounded-2xl p-5 shadow-sm mb-4 text-left">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-3xl">🍎</span>
+        <h2 class="font-bold text-gray-800">iPhone / iPad</h2>
+      </div>
+      <ol class="space-y-2 text-sm text-gray-600">
+        <li class="flex items-start gap-2"><span class="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0 mt-0.5">1</span>Ouvre <strong>urukundo-2qq5.vercel.app</strong> dans <strong>Safari</strong></li>
+        <li class="flex items-start gap-2"><span class="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0 mt-0.5">2</span>Appuie sur le bouton <strong>partage ⬆️</strong> en bas</li>
+        <li class="flex items-start gap-2"><span class="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0 mt-0.5">3</span>Choisis <strong>"Sur l'écran d'accueil"</strong></li>
+        <li class="flex items-start gap-2"><span class="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs flex-shrink-0 mt-0.5">4</span>Appuie <strong>"Ajouter"</strong> ✅</li>
+      </ol>
+    </div>
+
+    <!-- Bouton principal -->
+    <a href="/" class="block w-full py-4 bg-gradient-to-r from-red-600 to-green-600 text-white rounded-2xl font-bold text-lg shadow-lg active:scale-95 transition-all mb-3">
+      🇧🇮 Ouvrir Urukundo
+    </a>
+
+    <p class="text-xs text-gray-400">Gratuit • Pas de pub • 100% Burundais</p>
+  </div>
+
+  <script>
+    // Auto-install sur Android
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById('android-btn').style.display = 'block';
+    });
+  </script>
+</body>
+</html>
