@@ -4,24 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Urukundo 🇧🇮 - Dating Burundais</title>
-
-    <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#ce1126" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Urukundo" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
-
-    <!-- SEO -->
     <meta name="description" content="L'application de rencontre pour les Burundais du monde entier." />
-    <meta property="og:title" content="Urukundo 🇧🇮" />
-    <meta property="og:description" content="L'app de rencontre pour les Burundais du monde entier" />
-    <meta property="og:image" content="/icon-512.png" />
-    <meta property="og:url" content="https://urukundo-2qq5.vercel.app" />
-    <meta property="og:type" content="website" />
-
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -30,19 +19,14 @@
       * { -webkit-tap-highlight-color: transparent; }
     </style>
   </head>
-  <body class="bg-white overflow-hidden">
+  <body class="bg-white">
     <div id="root"></div>
     <script type="module" src="/src/index.tsx"></script>
     <script>
+      // Nettoyer les anciens service workers
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(reg => {
-              console.log('SW registered');
-              // Force update
-              reg.update();
-            })
-            .catch(err => console.log('SW error:', err));
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          regs.forEach(reg => reg.unregister());
         });
       }
     </script>
