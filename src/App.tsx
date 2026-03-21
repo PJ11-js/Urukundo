@@ -14,6 +14,7 @@ import ProfileScreen from './components/ProfileScreen';
 import ChatDetailScreen from './components/ChatDetailScreen';
 import LikesScreen from './components/LikesScreen';
 import FeedbackScreen from './components/FeedbackScreen';
+import GenderUpdateScreen from './components/GenderUpdateScreen';
 import BottomNav from './components/BottomNav';
 
 const DEMO_PROFILES: UserProfile[] = [
@@ -40,6 +41,7 @@ const App: React.FC = () => {
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [likesCount, setLikesCount] = useState(0);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [needsGenderUpdate, setNeedsGenderUpdate] = useState(false);
 
   const handleLangSelect = (l: 'fr' | 'en') => {
     setLang(l);
