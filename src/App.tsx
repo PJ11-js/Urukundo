@@ -14,6 +14,7 @@ import ProfileScreen from './components/ProfileScreen';
 import ChatDetailScreen from './components/ChatDetailScreen';
 import LikesScreen from './components/LikesScreen';
 import FeedbackScreen from './components/FeedbackScreen';
+import InstallBanner from './components/InstallBanner';
 import GenderUpdateScreen from './components/GenderUpdateScreen';
 import BottomNav from './components/BottomNav';
 
@@ -183,6 +184,7 @@ const App: React.FC = () => {
         <FeedbackScreen userId={user.uid} lang={lang} onConfirm={handleSignOut} onCancel={() => setShowFeedback(false)} />
       )}
 
+      <InstallBanner lang={lang} />
       <header className="px-6 py-4 flex justify-between items-center bg-white border-b border-gray-100 z-10 flex-shrink-0">
         <h1 className="text-2xl font-black tracking-tighter" style={{ color: '#ce1126' }}>
           URUKUNDO <span className="text-gray-300 font-light">| 🇧🇮</span>
