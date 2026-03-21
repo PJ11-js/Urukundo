@@ -57,7 +57,8 @@ const App: React.FC = () => {
           if (userData.lang) setLang(userData.lang);
           setNeedsSetup(false);
           loadLikesCount(firebaseUser.uid);
-          updateUserLocation(firebaseUser.uid);
+          const userData2 = userDoc.data() as UserProfile;
+          updateUserLocation(firebaseUser.uid, userData2.gender);
           // Marquer en ligne
           await updateDoc(doc(db, 'users', firebaseUser.uid), { isOnline: true, lastSeen: Date.now() });
         } else {
@@ -74,15 +75,15 @@ const App: React.FC = () => {
     return () => { unsub(); window.removeEventListener('beforeunload', handleBeforeUnload); };
   }, []);
 
-  const updateUserLocation = async (userId: string) => {
+  const updateUserLocation = async (userId: string, gender?: string) => {
     try {
       const coords = await getCurrentPosition();
       await updateDoc(doc(db, 'users', userId), { lat: coords.lat, lng: coords.lng });
-      loadProfiles(userId, coords);
-    } catch { loadProfiles(userId, null); }
+      loadProfiles(userId, coords, gender);
+    } catch { loadProfiles(userId, null, gender); }
   };
 
-  const loadProfiles = async (userId: string, coords: { lat: number; lng: number } | null) => {
+  const loadProfiles = async (userId: string, coords: { lat: number; lng: number } | null, myGender?: string) => {
     try {
       const snapshot = await getDocs(collection(db, 'users'));
       let realUsers: UserProfile[] = [];
@@ -96,7 +97,7 @@ const App: React.FC = () => {
       realUsers.sort((a, b) => (a.distance || 9999) - (b.distance || 9999));
 
       // Filtre par genre — hétérosexuel
-      const myGender = currentUser?.gender || (await getDoc(doc(db, 'users', userId))).data()?.gender;
+      const lookingForGender = myGender === "homme" ? "femme" : "homme";
       const lookingForGender = myGender === 'homme' ? 'femme' : 'homme';
       const filteredReal = realUsers.filter(u => !u.gender || u.gender === lookingForGender);
       const filteredDemo = DEMO_PROFILES.filter(d => d.gender === lookingForGender);
