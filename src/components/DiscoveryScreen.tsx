@@ -144,9 +144,9 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          // touch disabled
-          // touch disabled
-          // touch disabled>
+          
+          
+          >
 
           <div style={{
             transform: `translateX(${cardTranslateX}px) rotate(${cardRotation}deg)`,
