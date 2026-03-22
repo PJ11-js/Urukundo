@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { UserProfile } from '../types';
 
 interface Props {
@@ -14,7 +14,9 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
   const [isDragging, setIsDragging] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
   const [swipeAnim, setSwipeAnim] = useState<'like' | 'nope' | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const startX = useRef(0);
+  const animating = useRef(false);
 
   const T = {
     fr: { noMore: 'Plus de profils', comeback: 'Reviens plus tard!', reload: 'Recharger', ia: 'IA prototype' },
@@ -23,13 +25,29 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
   const t = T[lang];
 
   const triggerLike = (profile: UserProfile) => {
+    if (animating.current) return;
+    animating.current = true;
     setSwipeAnim('like');
-    setTimeout(() => { onLike(profile); setActivePhoto(0); setSwipeAnim(null); setDragX(0); }, 350);
+    setTimeout(() => {
+      onLike(profile);
+      setActivePhoto(0);
+      setSwipeAnim(null);
+      setDragX(0);
+      animating.current = false;
+    }, 400);
   };
 
   const triggerDislike = (id: string) => {
+    if (animating.current) return;
+    animating.current = true;
     setSwipeAnim('nope');
-    setTimeout(() => { onDislike(id); setActivePhoto(0); setSwipeAnim(null); setDragX(0); }, 350);
+    setTimeout(() => {
+      onDislike(id);
+      setActivePhoto(0);
+      setSwipeAnim(null);
+      setDragX(0);
+      animating.current = false;
+    }, 400);
   };
 
   // Mouse desktop
@@ -37,14 +55,52 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
   const handleMouseMove = (e: React.MouseEvent) => { if (!isDragging) return; setDragX(e.clientX - startX.current); };
   const handleMouseUp = () => {
     setIsDragging(false);
-    if (dragX > 80 && profiles.length > 0) triggerLike(profiles[0]);
-    else if (dragX < -80 && profiles.length > 0) triggerDislike(profiles[0].id);
+    if (profiles.length === 0) return;
+    if (dragX > 80) triggerLike(profiles[0]);
+    else if (dragX < -80) triggerDislike(profiles[0].id);
     else setDragX(0);
   };
 
-  if (profiles.length === 0) {
+  // Touch mobile
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const touchIsHoriz = useRef<boolean | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    touchIsHoriz.current = null;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    if (touchIsHoriz.current === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      touchIsHoriz.current = Math.abs(dx) > Math.abs(dy);
+    }
+    if (touchIsHoriz.current) {
+      e.preventDefault();
+      setDragX(dx);
+      setIsDragging(true);
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    setIsDragging(false);
+    if (!touchIsHoriz.current || profiles.length === 0) {
+      setDragX(0);
+      return;
+    }
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    if (dx > 80) triggerLike(profiles[0]);
+    else if (dx < -80) triggerDislike(profiles[0].id);
+    else setDragX(0);
+    touchIsHoriz.current = null;
+  };
+
+  if (profiles.length === 0 && !swipeAnim) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-10 text-center">
+      <div className="h-full flex flex-col items-center justify-center p-10 text-center bg-white">
         <div className="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center mb-4">
           <i className="fa-solid fa-fire text-gray-300 text-4xl"></i>
         </div>
@@ -57,44 +113,52 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
     );
   }
 
+  if (profiles.length === 0) return <div className="h-full bg-white" />;
+
   const currentProfile = profiles[0];
+  const nextProfile = profiles[1];
   const photos = currentProfile.images?.length > 0 ? currentProfile.images : [];
-  const cardTranslateX = swipeAnim === 'like' ? 500 : swipeAnim === 'nope' ? -500 : dragX;
-  const cardRotation = swipeAnim === 'like' ? 30 : swipeAnim === 'nope' ? -30 : dragX * 0.06;
+  const cardTranslateX = swipeAnim === 'like' ? 600 : swipeAnim === 'nope' ? -600 : dragX;
+  const cardRotation = swipeAnim === 'like' ? 35 : swipeAnim === 'nope' ? -35 : dragX * 0.06;
   const likeOpacity = swipeAnim === 'like' ? 1 : Math.min(1, dragX / 60);
   const nopeOpacity = swipeAnim === 'nope' ? 1 : Math.min(1, -dragX / 60);
 
   return (
-    <div className="h-full flex flex-col select-none">
+    <div className="h-full flex flex-col select-none bg-white">
+      <div className="relative flex-1 p-4 pb-0">
 
-      {/* Zone carte + boutons latéraux */}
-      <div className="relative flex-1 flex items-center px-2 py-4">
-
-        {/* Bouton NOPE gauche */}
-        <button
-          onClick={() => triggerDislike(currentProfile.id)}
-          className="absolute left-0 z-20 flex flex-col items-center justify-center"
-          style={{ top: '50%', transform: 'translateY(-50%)', left: '2px' }}>
-          <div className="w-10 h-20 bg-white/90 backdrop-blur-sm rounded-r-2xl shadow-lg flex flex-col items-center justify-center gap-1 border border-red-100 active:scale-95 transition-transform">
-            <i className="fa-solid fa-xmark text-red-500 text-xl"></i>
-            <span className="text-[9px] font-bold text-red-400 rotate-90">NOPE</span>
+        {/* Carte suivante en arrière-plan */}
+        {nextProfile && (
+          <div className="absolute inset-4 rounded-3xl overflow-hidden shadow-md bg-gray-100"
+            style={{ transform: 'scale(0.95)', zIndex: 0 }}>
+            {nextProfile.images?.[0] && (
+              <img src={nextProfile.images[0]} className="w-full h-full object-cover opacity-70" alt="" />
+            )}
           </div>
-        </button>
+        )}
 
-        {/* Carte profil */}
-        <div className="flex-1 relative h-full mx-10"
+        {/* Carte principale */}
+        <div className="absolute inset-4 z-10"
+          style={{ touchAction: 'pan-y' }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}>
+          onMouseLeave={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}>
 
-          <div
-            style={{
-              transform: `translateX(${cardTranslateX}px) rotate(${cardRotation}deg)`,
-              transition: isDragging ? 'none' : 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-              willChange: 'transform',
-            }}
-            className="absolute inset-0 rounded-3xl overflow-hidden shadow-xl bg-white cursor-grab">
+          <div style={{
+            transform: `translateX(${cardTranslateX}px) rotate(${cardRotation}deg)`,
+            transition: isDragging ? 'none' : 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+            willChange: 'transform',
+            height: '100%',
+            borderRadius: '1.5rem',
+            overflow: 'hidden',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+            background: 'white',
+            cursor: isDragging ? 'grabbing' : 'grab',
+          }}>
 
             {photos[activePhoto] ? (
               <img src={photos[activePhoto]} alt={currentProfile.name}
@@ -105,7 +169,6 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
               </div>
             )}
 
-            {/* Indicateurs photos */}
             {photos.length > 1 && (
               <div className="absolute top-3 left-0 right-0 flex justify-center gap-1 px-4 pointer-events-none">
                 {photos.map((_, i) => (
@@ -114,21 +177,29 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
               </div>
             )}
 
-            {/* Zones tap photo gauche/droite */}
-            <div className="absolute inset-0 flex pointer-events-auto">
+            {/* Zones tap photo */}
+            <div className="absolute inset-0 flex" style={{ pointerEvents: 'auto' }}>
               <div className="flex-1" onClick={() => setActivePhoto(p => Math.max(0, p - 1))} />
               <div className="flex-1" onClick={() => setActivePhoto(p => Math.min(photos.length - 1, p + 1))} />
             </div>
 
-            <div style={{ opacity: likeOpacity }} className="absolute top-8 left-6 border-4 border-green-400 text-green-400 px-4 py-1 rounded-xl rotate-[-20deg] text-2xl font-black pointer-events-none">LIKE 💚</div>
-            <div style={{ opacity: nopeOpacity }} className="absolute top-8 right-6 border-4 border-red-400 text-red-400 px-4 py-1 rounded-xl rotate-[20deg] text-2xl font-black pointer-events-none">NOPE ❌</div>
+            <div style={{ opacity: likeOpacity }}
+              className="absolute top-8 left-6 border-4 border-green-400 text-green-400 px-4 py-1 rounded-xl rotate-[-20deg] text-2xl font-black pointer-events-none">
+              LIKE 💚
+            </div>
+            <div style={{ opacity: nopeOpacity }}
+              className="absolute top-8 right-6 border-4 border-red-400 text-red-400 px-4 py-1 rounded-xl rotate-[20deg] text-2xl font-black pointer-events-none">
+              NOPE ❌
+            </div>
 
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-5 text-white pointer-events-none">
               <div className="flex items-baseline gap-2 flex-wrap">
                 <h2 className="text-2xl font-bold">{currentProfile.name}, {currentProfile.age}</h2>
                 {currentProfile.isDemo
                   ? <span className="text-xs bg-gray-500/80 px-2 py-0.5 rounded-full italic">{t.ia}</span>
-                  : <span className="flex items-center gap-1 text-xs bg-green-500/80 px-2 py-0.5 rounded-full"><i className="fa-solid fa-circle text-[6px]"></i> Online</span>
+                  : <span className="flex items-center gap-1 text-xs bg-green-500/80 px-2 py-0.5 rounded-full">
+                      <i className="fa-solid fa-circle text-[6px]"></i> Online
+                    </span>
                 }
               </div>
               <div className="flex items-center gap-2 mt-1 opacity-90 text-xs">
@@ -144,21 +215,10 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
             </div>
           </div>
         </div>
-
-        {/* Bouton LIKE droite */}
-        <button
-          onClick={() => triggerLike(currentProfile)}
-          className="absolute right-0 z-20 flex flex-col items-center justify-center"
-          style={{ top: '50%', transform: 'translateY(-50%)', right: '2px' }}>
-          <div className="w-10 h-20 bg-white/90 backdrop-blur-sm rounded-l-2xl shadow-lg flex flex-col items-center justify-center gap-1 border border-green-100 active:scale-95 transition-transform">
-            <i className="fa-solid fa-heart text-green-500 text-xl"></i>
-            <span className="text-[9px] font-bold text-green-400 rotate-90">LIKE</span>
-          </div>
-        </button>
       </div>
 
-      {/* Boutons du bas */}
-      <div className="flex justify-center items-center gap-4 py-4">
+      {/* Boutons */}
+      <div className="flex justify-center items-center gap-4 py-4 px-4 bg-white">
         <button onClick={onUndo}
           className="w-12 h-12 rounded-full border-2 border-yellow-100 text-yellow-500 flex items-center justify-center shadow-md bg-white active:scale-95 transition-transform">
           <i className="fa-solid fa-rotate-left text-lg"></i>
