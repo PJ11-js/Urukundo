@@ -128,54 +128,28 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLike = (profile: UserProfile) => {
-    // 1. Mise à jour UI immédiate (Zéro lag)
-    setProfiles(prev => prev.filter(p => p.id !== profile.id));
-
-    // Calcul de compatibilité local pour l'animation
-    const compatibility = currentUser ? calculateCompatibility(currentUser, profile) : 50;
-    
+  const handleLike = async (profile: UserProfile) => {
     if (user) {
-      // 2. Lancer l'enregistrement et la vérification en arrière-plan
-      const processLike = async () => {
-        try {
-          // Enregistrer le like dans Firebase
-          await addDoc(collection(db, 'likes'), { 
-            fromUserId: user.uid, 
-            toUserId: profile.id, 
-            timestamp: serverTimestamp() 
-          });
-
-          // 3. Vérifier s'il y a un match réciproque
-          if (!profile.isDemo) {
-            const q = query(
-              collection(db, 'likes'), 
-              where('fromUserId', '==', profile.id), 
-              where('toUserId', '==', user.uid)
-            );
-            const existing = await getDocs(q);
-
-            if (!existing.empty) {
-              const newSession: ChatSession = { 
-                id: `session-${Date.now()}`, 
-                partner: profile, 
-                messages: [{ 
-                  id: 'm1', 
-                  senderId: profile.id, 
-                  text: lang === 'fr' ? `C'est un match ! Amahoro ${currentUser?.name} ! 🇧🇮` : `It's a match! Amahoro ${currentUser?.name}! 🇧🇮`, 
-                  timestamp: Date.now() 
-                }] 
-              };
-              setMatches(prev => [newSession, ...prev]);
-            }
+      try {
+        await addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp() });
+        if (!profile.isDemo) {
+          const q = query(collection(db, 'likes'), where('fromUserId', '==', profile.id), where('toUserId', '==', user.uid));
+          const existing = await getDocs(q);
+          if (!existing.empty) {
+            const newSession: ChatSession = { id: `session-${Date.now()}`, partner: profile, messages: [{ id: 'm1', senderId: profile.id, text: lang === 'fr' ? `C'est un match ! Amahoro ${currentUser?.name} ! 🇧🇮` : `It's a match! Amahoro ${currentUser?.name}! 🇧🇮`, timestamp: Date.now() }] };
+            setMatches(prev => [newSession, ...prev]);
+            setProfiles(prev => prev.filter(p => p.id !== profile.id));
+            return;
           }
-        } catch (e) {
-          console.error("Erreur Like:", e);
         }
-      };
-
-      processLike(); // On l'exécute sans 'await' pour ne pas bloquer le swipe
+      } catch {}
     }
+    const compatibility = currentUser ? calculateCompatibility(currentUser, profile) : 50;
+    if (isMatch(compatibility)) {
+      const newSession: ChatSession = { id: `session-${Date.now()}`, partner: profile, messages: [{ id: 'm1', senderId: profile.id, text: lang === 'fr' ? `C'est un match ! Amahoro ${currentUser?.name} ! 🇧🇮` : `It's a match! Amahoro ${currentUser?.name}! 🇧🇮`, timestamp: Date.now() }] };
+      setMatches(prev => [newSession, ...prev]);
+    }
+    setProfiles(prev => prev.filter(p => p.id !== profile.id));
   };
 
   const handleDislike = (profileId: string) => setProfiles(prev => prev.filter(p => p.id !== profileId));
