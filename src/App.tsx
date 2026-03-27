@@ -133,11 +133,18 @@ const App: React.FC = () => {
       addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp() }).catch(() => {});
     }
     const compatibility = currentUser ? calculateCompatibility(currentUser, profile) : 50;
-    if (isMatch(compatibility)) {
+    const alreadyMatched = matches.some(m => m.partner.id === profile.id);
+    if (!alreadyMatched && isMatch(compatibility)) {
       const newSession: ChatSession = { id: `session-${Date.now()}`, partner: profile, messages: [{ id: 'm1', senderId: profile.id, text: lang === 'fr' ? `C'est un match ! Amahoro ${currentUser?.name} ! 🇧🇮` : `It's a match! Amahoro ${currentUser?.name}! 🇧🇮`, timestamp: Date.now() }] };
       setMatches(prev => [newSession, ...prev]);
     }
-    setProfiles(prev => prev.filter(p => p.id !== profile.id));
+    setProfiles(prev => {
+      const updated = prev.filter(p => p.id !== profile.id);
+      if (updated.length < 2 && user) {
+        setTimeout(() => updateUserLocation(user.uid), 1000);
+      }
+      return updated;
+    });
   };
 
   const handleDislike = (profileId: string) => setProfiles(prev => prev.filter(p => p.id !== profileId));
