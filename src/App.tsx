@@ -128,21 +128,9 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLike = async (profile: UserProfile) => {
+  const handleLike = (profile: UserProfile) => {
     if (user) {
-      try {
-        await addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp() });
-        if (!profile.isDemo) {
-          const q = query(collection(db, 'likes'), where('fromUserId', '==', profile.id), where('toUserId', '==', user.uid));
-          const existing = await getDocs(q);
-          if (!existing.empty) {
-            const newSession: ChatSession = { id: `session-${Date.now()}`, partner: profile, messages: [{ id: 'm1', senderId: profile.id, text: lang === 'fr' ? `C'est un match ! Amahoro ${currentUser?.name} ! 🇧🇮` : `It's a match! Amahoro ${currentUser?.name}! 🇧🇮`, timestamp: Date.now() }] };
-            setMatches(prev => [newSession, ...prev]);
-            setProfiles(prev => prev.filter(p => p.id !== profile.id));
-            return;
-          }
-        }
-      } catch {}
+      addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp() }).catch(() => {});
     }
     const compatibility = currentUser ? calculateCompatibility(currentUser, profile) : 50;
     if (isMatch(compatibility)) {
