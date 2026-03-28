@@ -140,8 +140,11 @@ const App: React.FC = () => {
     }
     setProfiles(prev => {
       const updated = prev.filter(p => p.id !== profile.id);
-      if (updated.length < 2 && user) {
-        setTimeout(() => updateUserLocation(user.uid), 1000);
+      if (updated.length === 0) {
+        // Remettre les profils démo quand tout est épuisé
+        const gender = currentUser?.gender;
+        const lookingFor = gender === 'homme' ? 'femme' : gender === 'femme' ? 'homme' : null;
+        return lookingFor ? DEMO_PROFILES.filter(d => d.gender === lookingFor) : DEMO_PROFILES;
       }
       return updated;
     });
