@@ -17,6 +17,7 @@ import FeedbackScreen from './components/FeedbackScreen';
 import InstallBanner from './components/InstallBanner';
 import GenderUpdateScreen from './components/GenderUpdateScreen';
 import BottomNav from './components/BottomNav';
+import ThemeToggle, { Theme } from './components/ThemeToggle';
 
 const DEMO_PROFILES: UserProfile[] = [
   { id: 'demo1', name: 'Amina', age: 23, gender: 'femme', bio: 'Amahoro ! Étudiante en droit à Bujumbura. 🇧🇮', location: 'Bujumbura, Burundi', country: 'Burundi', images: ['https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600&h=800&fit=crop&crop=face'], interests: ['Danse', 'Droit', 'Culture', 'Musique'], distance: 2, isDemo: true },
@@ -45,10 +46,21 @@ const App: React.FC = () => {
   const [likesCount, setLikesCount] = useState(0);
   const [showFeedback, setShowFeedback] = useState(false);
   const [needsGenderUpdate, setNeedsGenderUpdate] = useState(false);
+  const [theme, setTheme] = useState<Theme>((localStorage.getItem('urukundo_theme') as Theme) || 'light');
 
   const handleLangSelect = (l: 'fr' | 'en') => {
     setLang(l);
     localStorage.setItem('urukundo_lang', l);
+  };
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  const handleThemeChange = (t: Theme) => {
+    setTheme(t);
+    localStorage.setItem('urukundo_theme', t);
+    if (user) updateDoc(doc(db, 'users', user.uid), { theme: t }).catch(() => {});
   };
 
   useEffect(() => {
@@ -60,6 +72,7 @@ const App: React.FC = () => {
           const userData = userDoc.data() as UserProfile;
           setCurrentUser({ ...userData, interests: userData.interests || [], images: userData.images || [] });
           if (userData.lang) setLang(userData.lang);
+          if (userData.theme) { setTheme(userData.theme); localStorage.setItem('urukundo_theme', userData.theme); }
           setNeedsSetup(false);
           loadLikesCount(firebaseUser.uid);
           const userData2 = userDoc.data() as UserProfile;
@@ -201,17 +214,22 @@ const App: React.FC = () => {
 
   const handleAcceptLegal = () => { localStorage.setItem('urukundo_legal_accepted', 'true'); setHasAcceptedLegal(true); };
 
-  if (authLoading) return (
-    <div className="flex items-center justify-center h-screen bg-white">
-      <div className="text-center"><div className="text-4xl mb-3">🇧🇮</div><div className="text-red-500 font-bold text-xl">URUKUNDO</div><div className="text-gray-400 text-sm mt-2">{lang === 'fr' ? 'Chargement...' : 'Loading...'}</div></div>
-    </div>
-  );
+  let content: React.ReactNode;
 
-  if (!hasAcceptedLegal) return <LegalScreen onAccept={handleAcceptLegal} />;
-  if (!user) return <LoginScreen lang={lang} onLangSelect={handleLangSelect} />;
-  if (needsSetup) return <SetupScreen userId={user.uid} displayName={user.displayName || ''} photoURL={user.photoURL || ''} onComplete={handleProfileSetupComplete} lang={lang} />;
-
-  return (
+  if (authLoading) {
+    content = (
+      <div className="flex items-center justify-center h-screen bg-white">
+        <div className="text-center"><div className="text-4xl mb-3">🇧🇮</div><div className="text-red-500 font-bold text-xl">URUKUNDO</div><div className="text-gray-400 text-sm mt-2">{lang === 'fr' ? 'Chargement...' : 'Loading...'}</div></div>
+      </div>
+    );
+  } else if (!hasAcceptedLegal) {
+    content = <LegalScreen onAccept={handleAcceptLegal} />;
+  } else if (!user) {
+    content = <LoginScreen lang={lang} onLangSelect={handleLangSelect} />;
+  } else if (needsSetup) {
+    content = <SetupScreen userId={user.uid} displayName={user.displayName || ''} photoURL={user.photoURL || ''} onComplete={handleProfileSetupComplete} lang={lang} />;
+  } else {
+    content = (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-white shadow-2xl relative overflow-hidden border-x border-gray-100">
       {showFeedback && user && (
         <FeedbackScreen userId={user.uid} lang={lang} onConfirm={handleSignOut} onCancel={() => setShowFeedback(false)} />
@@ -250,6 +268,14 @@ const App: React.FC = () => {
 
       {currentScreen !== AppScreen.CHAT && <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} matches={matches} likesCount={likesCount} />}
     </div>
+    );
+  }
+
+  return (
+    <>
+      {content}
+      <ThemeToggle theme={theme} onChange={handleThemeChange} />
+    </>
   );
 };
 

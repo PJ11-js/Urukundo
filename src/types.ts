@@ -20,6 +20,7 @@ export interface UserProfile {
   lat?: number;
   lng?: number;
   isPremium?: boolean;
+  theme?: 'light' | 'dark' | 'soft';
 }
 
 export interface Message {

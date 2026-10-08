@@ -28,6 +28,42 @@
         left: 0;
       }
       #root { height: 100%; background: white; }
+
+      /* Thèmes — on re-teinte les classes Tailwind existantes plutôt que de
+         toucher chaque composant, puisque Tailwind est chargé en CDN (pas de build). */
+      html[data-theme="soft"] body,
+      html[data-theme="soft"] #root { background: #fdf8f0; }
+      html[data-theme="soft"] .bg-white { background-color: #fdf8f0 !important; }
+      html[data-theme="soft"] .bg-gray-50 { background-color: #f7ede0 !important; }
+      html[data-theme="soft"] .bg-gray-50\/50 { background-color: rgba(247,237,224,0.5) !important; }
+      html[data-theme="soft"] .bg-gray-100 { background-color: #f0e3d0 !important; }
+      html[data-theme="soft"] .bg-gray-200 { background-color: #e8d7bd !important; }
+      html[data-theme="soft"] .bg-gray-300 { background-color: #ddc9a8 !important; }
+      html[data-theme="soft"] .border-gray-100 { border-color: #ead9c0 !important; }
+      html[data-theme="soft"] .border-gray-200 { border-color: #e0c9a5 !important; }
+      html[data-theme="soft"] .text-gray-800 { color: #4a3f35 !important; }
+      html[data-theme="soft"] .text-gray-700 { color: #5a4d40 !important; }
+      html[data-theme="soft"] .text-gray-600 { color: #6b5d4e !important; }
+      html[data-theme="soft"] .text-gray-500 { color: #8a7a68 !important; }
+      html[data-theme="soft"] .text-gray-400 { color: #a89881 !important; }
+      html[data-theme="soft"] .text-gray-300 { color: #c4b49c !important; }
+
+      html[data-theme="dark"] body,
+      html[data-theme="dark"] #root { background: #151516; }
+      html[data-theme="dark"] .bg-white { background-color: #1c1c1e !important; }
+      html[data-theme="dark"] .bg-gray-50 { background-color: #151516 !important; }
+      html[data-theme="dark"] .bg-gray-50\/50 { background-color: rgba(21,21,22,0.5) !important; }
+      html[data-theme="dark"] .bg-gray-100 { background-color: #2a2a2c !important; }
+      html[data-theme="dark"] .bg-gray-200 { background-color: #343436 !important; }
+      html[data-theme="dark"] .bg-gray-300 { background-color: #46464a !important; }
+      html[data-theme="dark"] .border-gray-100 { border-color: #2e2e30 !important; }
+      html[data-theme="dark"] .border-gray-200 { border-color: #3a3a3c !important; }
+      html[data-theme="dark"] .text-gray-800 { color: #f2f2f3 !important; }
+      html[data-theme="dark"] .text-gray-700 { color: #e2e2e4 !important; }
+      html[data-theme="dark"] .text-gray-600 { color: #c7c7ca !important; }
+      html[data-theme="dark"] .text-gray-500 { color: #a3a3a8 !important; }
+      html[data-theme="dark"] .text-gray-400 { color: #8b8b90 !important; }
+      html[data-theme="dark"] .text-gray-300 { color: #6f6f74 !important; }
     </style>
   </head>
   <body>
