@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.urukundo.twa",
+      "sha256_cert_fingerprints": [
+        "2D:91:B1:1D:6D:63:D6:1F:D1:1A:1E:54:97:49:9E:61:C2:5A:2A:95:F0:F7:22:F3:A3:E4:C9:8B:6C:8B:77:AB"
+      ]
+    }
+  }
+]
+

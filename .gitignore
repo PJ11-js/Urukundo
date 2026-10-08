@@ -1,1 +1,15 @@
 node_modules/
+.vercel
+.env*.local
+.claude/settings.local.json
+
+# Android signing & build artifacts
+android.keystore
+*.apk
+*.apk.idsig
+*.aab
+.gradle/
+app/build/
+build/
+dist/
+manifest-checksum.txt
