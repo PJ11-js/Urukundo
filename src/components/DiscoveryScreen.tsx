@@ -7,13 +7,20 @@ interface Props {
   onDislike: (id: string) => void;
   onUndo: () => void;
   lang?: 'fr' | 'en';
+  isPremium?: boolean;
+  countryFilter?: string;
+  onCountrySearch?: (country: string) => boolean;
+  onClearCountryFilter?: () => void;
 }
 
-const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo, lang = 'fr' }) => {
+const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo, lang = 'fr', isPremium = false, countryFilter = '', onCountrySearch, onClearCountryFilter }) => {
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
   const [swipeAnim, setSwipeAnim] = useState<'like' | 'nope' | null>(null);
+  const [showCountrySearch, setShowCountrySearch] = useState(false);
+  const [countryInput, setCountryInput] = useState('');
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const startX = useRef(0);
   const animating = useRef(false);
@@ -27,10 +34,29 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
   const frameRef = useRef<number | null>(null);
 
   const T = {
-    fr: { noMore: 'Plus de profils', comeback: 'Reviens plus tard !', reload: 'Recharger', ia: 'IA prototype', online: 'En ligne' },
-    en: { noMore: 'No more profiles', comeback: 'Come back later!', reload: 'Reload', ia: 'AI prototype', online: 'Online' }
+    fr: {
+      noMore: 'Plus de profils', comeback: 'Reviens plus tard !', reload: 'Recharger', ia: 'IA prototype', online: 'En ligne',
+      verified: 'Position vérifiée', searchCountry: 'Rechercher un pays', countryPlaceholder: 'Ex: Canada',
+      search: 'Chercher', clear: 'Réinitialiser', premiumTitle: '🔒 Fonctionnalité Premium',
+      premiumBody: "Passe Premium pour chercher des profils burundais dans n'importe quel pays (Canada, France, Belgique...).",
+      premiumClose: 'Compris',
+    },
+    en: {
+      noMore: 'No more profiles', comeback: 'Come back later!', reload: 'Reload', ia: 'AI prototype', online: 'Online',
+      verified: 'Verified location', searchCountry: 'Search a country', countryPlaceholder: 'E.g. Canada',
+      search: 'Search', clear: 'Reset', premiumTitle: '🔒 Premium feature',
+      premiumBody: 'Go Premium to search Burundian profiles in any country (Canada, France, Belgium...).',
+      premiumClose: 'Got it',
+    }
   };
   const t = T[lang];
+
+  const submitCountrySearch = () => {
+    if (!countryInput.trim()) return;
+    const ok = onCountrySearch?.(countryInput.trim());
+    if (!ok) setShowPaywall(true);
+    else setShowCountrySearch(false);
+  };
 
   const scheduleDragUpdate = (value: number) => {
     dragXRef.current = value;
@@ -156,6 +182,11 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
         >
           <i className="fa-solid fa-rotate-left"></i> {t.reload}
         </button>
+        {countryFilter && (
+          <button onClick={onClearCountryFilter} className="mt-3 text-sm text-gray-400 underline">
+            {t.clear} ({countryFilter})
+          </button>
+        )}
       </div>
     );
   }
@@ -174,6 +205,54 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
 
   return (
     <div className="h-full flex flex-col bg-white select-none">
+      {/* Recherche par pays (Premium) */}
+      <div className="px-4 pt-3 flex-shrink-0">
+        {!showCountrySearch ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => (isPremium ? setShowCountrySearch(true) : setShowPaywall(true))}
+              className="flex items-center gap-2 text-xs font-medium text-gray-500 bg-gray-50 px-3 py-2 rounded-full border border-gray-100"
+            >
+              <i className="fa-solid fa-globe text-red-400"></i>
+              {countryFilter ? `🌍 ${countryFilter}` : t.searchCountry}
+              {!isPremium && <i className="fa-solid fa-lock text-[10px] text-yellow-500"></i>}
+            </button>
+            {countryFilter && (
+              <button onClick={onClearCountryFilter} className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center">
+                <i className="fa-solid fa-xmark text-xs"></i>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              value={countryInput}
+              onChange={e => setCountryInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && submitCountrySearch()}
+              placeholder={t.countryPlaceholder}
+              className="flex-1 px-3 py-2 bg-gray-50 rounded-full text-sm border border-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200"
+            />
+            <button onClick={submitCountrySearch} className="px-3 py-2 bg-red-500 text-white rounded-full text-xs font-medium">{t.search}</button>
+            <button onClick={() => setShowCountrySearch(false)} className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center">
+              <i className="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {showPaywall && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setShowPaywall(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center space-y-3" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800">{t.premiumTitle}</h3>
+            <p className="text-sm text-gray-500">{t.premiumBody}</p>
+            <button onClick={() => setShowPaywall(false)} className="mt-2 w-full py-3 bg-gradient-to-r from-red-600 to-green-600 text-white rounded-2xl font-bold">
+              {t.premiumClose}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="relative flex-1 p-4 pb-0">
         {/* Carte suivante */}
         {nextProfile && (
@@ -220,7 +299,6 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
             {photos[activePhoto] ? (
               <img
                 src={photos[activePhoto]}
-                loading="lazy"
                 alt={currentProfile.name}
                 className="w-full h-full object-cover pointer-events-none"
                 draggable={false}
@@ -286,6 +364,11 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
                   {currentProfile.location}
                   {currentProfile.distance !== undefined ? ` • ${currentProfile.distance} km` : ''}
                 </span>
+                {currentProfile.locationVerified && (
+                  <span className="flex items-center gap-1 text-green-300" title={t.verified}>
+                    <i className="fa-solid fa-circle-check"></i>
+                  </span>
+                )}
               </div>
               <p className="mt-1 text-xs line-clamp-2 opacity-80">{currentProfile.bio}</p>
               <div className="flex flex-wrap gap-1 mt-2">

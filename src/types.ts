@@ -15,6 +15,11 @@ export interface UserProfile {
   lang?: 'fr' | 'en';
   isOnline?: boolean;
   lastSeen?: number;
+  country?: string;
+  locationVerified?: boolean;
+  lat?: number;
+  lng?: number;
+  isPremium?: boolean;
 }
 
 export interface Message {

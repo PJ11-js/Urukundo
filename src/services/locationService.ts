@@ -12,6 +12,14 @@ export const getCurrentPosition = (): Promise<{ lat: number; lng: number }> => {
   });
 };
 
+export const reverseGeocode = async (lat: number, lng: number): Promise<{ city: string; country: string }> => {
+  const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+  const data = await res.json();
+  const city = data.address?.city || data.address?.town || data.address?.village || 'Position détectée';
+  const country = data.address?.country || '';
+  return { city, country };
+};
+
 export const calculateDistance = (
   lat1: number, lng1: number,
   lat2: number, lng2: number

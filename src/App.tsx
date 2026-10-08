@@ -3,7 +3,7 @@ import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { AppScreen, UserProfile, ChatSession } from './types';
-import { getCurrentPosition, calculateDistance } from './services/locationService';
+import { getCurrentPosition, calculateDistance, reverseGeocode } from './services/locationService';
 import { calculateCompatibility, isMatch } from './services/matchingService';
 import LoginScreen from './components/LoginScreen';
 import LegalScreen from './components/LegalScreen';
@@ -19,14 +19,14 @@ import GenderUpdateScreen from './components/GenderUpdateScreen';
 import BottomNav from './components/BottomNav';
 
 const DEMO_PROFILES: UserProfile[] = [
-  { id: 'demo1', name: 'Amina', age: 23, gender: 'femme', bio: 'Amahoro ! Étudiante en droit à Bujumbura. 🇧🇮', location: 'Bujumbura, Burundi', images: ['https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600&h=800&fit=crop&crop=face'], interests: ['Danse', 'Droit', 'Culture', 'Musique'], distance: 2, isDemo: true },
-  { id: 'demo3', name: 'Grace', age: 25, gender: 'femme', bio: 'Infirmière à Paris. La musique africaine est ma passion.', location: 'Paris, France', images: ['https://images.unsplash.com/photo-1589156280159-27698a70f29e?w=600&h=800&fit=crop&crop=face'], interests: ['Musique', 'Santé', 'Voyage', 'Mode'], distance: 200, isDemo: true },
-  { id: 'demo5', name: 'Sandrine', age: 26, gender: 'femme', bio: 'Comptable à Gitega. Fan de football. 🇧🇮', location: 'Gitega, Burundi', images: ['https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&h=800&fit=crop&crop=face'], interests: ['Football', 'Nature', 'Lecture', 'Voyage'], distance: 45, isDemo: true },
-  { id: 'demo7', name: 'Clarisse', age: 24, gender: 'femme', bio: 'Enseignante à Bujumbura. 🌍', location: 'Bujumbura, Burundi', images: ['https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=600&h=800&fit=crop&crop=face'], interests: ['Éducation', 'Culture', 'Lecture', 'Danse'], distance: 5, isDemo: true },
-  { id: 'demo2', name: 'Jean-Pierre', age: 28, gender: 'homme', bio: 'Ingénieur à Bruxelles, fier Burundais.', location: 'Bruxelles, Belgique', images: ['https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?w=600&h=800&fit=crop&crop=face'], interests: ['Tech', 'Football', 'Voyage', 'Cuisine'], distance: 150, isDemo: true },
-  { id: 'demo4', name: 'Emmanuel', age: 31, gender: 'homme', bio: 'Entrepreneur à Montréal. Burundais dans l\'âme.', location: 'Montréal, Canada', images: ['https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=800&fit=crop&crop=face'], interests: ['Business', 'Cuisine', 'Sport', 'Musique'], distance: 500, isDemo: true },
-  { id: 'demo6', name: 'Patrick', age: 29, gender: 'homme', bio: 'Musicien à Nairobi. Amahoro !', location: 'Nairobi, Kenya', images: ['https://images.unsplash.com/photo-1522529599102-193c0d76b5b6?w=600&h=800&fit=crop&crop=face'], interests: ['Musique', 'Art', 'Culture', 'Voyage'], distance: 800, isDemo: true },
-  { id: 'demo8', name: 'Thierry', age: 33, gender: 'homme', bio: 'Médecin à Londres.', location: 'Londres, UK', images: ['https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&h=800&fit=crop&crop=face'], interests: ['Santé', 'Sport', 'Voyage', 'Cinéma'], distance: 300, isDemo: true },
+  { id: 'demo1', name: 'Amina', age: 23, gender: 'femme', bio: 'Amahoro ! Étudiante en droit à Bujumbura. 🇧🇮', location: 'Bujumbura, Burundi', country: 'Burundi', images: ['https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600&h=800&fit=crop&crop=face'], interests: ['Danse', 'Droit', 'Culture', 'Musique'], distance: 2, isDemo: true },
+  { id: 'demo3', name: 'Grace', age: 25, gender: 'femme', bio: 'Infirmière à Paris. La musique africaine est ma passion.', location: 'Paris, France', country: 'France', images: ['https://images.unsplash.com/photo-1589156280159-27698a70f29e?w=600&h=800&fit=crop&crop=face'], interests: ['Musique', 'Santé', 'Voyage', 'Mode'], distance: 200, isDemo: true },
+  { id: 'demo5', name: 'Sandrine', age: 26, gender: 'femme', bio: 'Comptable à Gitega. Fan de football. 🇧🇮', location: 'Gitega, Burundi', country: 'Burundi', images: ['https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&h=800&fit=crop&crop=face'], interests: ['Football', 'Nature', 'Lecture', 'Voyage'], distance: 45, isDemo: true },
+  { id: 'demo7', name: 'Clarisse', age: 24, gender: 'femme', bio: 'Enseignante à Bujumbura. 🌍', location: 'Bujumbura, Burundi', country: 'Burundi', images: ['https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=600&h=800&fit=crop&crop=face'], interests: ['Éducation', 'Culture', 'Lecture', 'Danse'], distance: 5, isDemo: true },
+  { id: 'demo2', name: 'Jean-Pierre', age: 28, gender: 'homme', bio: 'Ingénieur à Bruxelles, fier Burundais.', location: 'Bruxelles, Belgique', country: 'Belgique', images: ['https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?w=600&h=800&fit=crop&crop=face'], interests: ['Tech', 'Football', 'Voyage', 'Cuisine'], distance: 150, isDemo: true },
+  { id: 'demo4', name: 'Emmanuel', age: 31, gender: 'homme', bio: 'Entrepreneur à Montréal. Burundais dans l\'âme.', location: 'Montréal, Canada', country: 'Canada', images: ['https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=800&fit=crop&crop=face'], interests: ['Business', 'Cuisine', 'Sport', 'Musique'], distance: 500, isDemo: true },
+  { id: 'demo6', name: 'Patrick', age: 29, gender: 'homme', bio: 'Musicien à Nairobi. Amahoro !', location: 'Nairobi, Kenya', country: 'Kenya', images: ['https://images.unsplash.com/photo-1522529599102-193c0d76b5b6?w=600&h=800&fit=crop&crop=face'], interests: ['Musique', 'Art', 'Culture', 'Voyage'], distance: 800, isDemo: true },
+  { id: 'demo8', name: 'Thierry', age: 33, gender: 'homme', bio: 'Médecin à Londres.', location: 'Londres, UK', country: 'UK', images: ['https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&h=800&fit=crop&crop=face'], interests: ['Santé', 'Sport', 'Voyage', 'Cinéma'], distance: 300, isDemo: true },
 ];
 
 const App: React.FC = () => {
@@ -38,6 +38,8 @@ const App: React.FC = () => {
   const [hasAcceptedLegal, setHasAcceptedLegal] = useState(localStorage.getItem('urukundo_legal_accepted') === 'true');
   const [currentScreen, setCurrentScreen] = useState<AppScreen>(AppScreen.DISCOVERY);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [allRealUsers, setAllRealUsers] = useState<UserProfile[]>([]);
+  const [countryFilter, setCountryFilter] = useState('');
   const [matches, setMatches] = useState<ChatSession[]>([]);
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [likesCount, setLikesCount] = useState(0);
@@ -81,7 +83,15 @@ const App: React.FC = () => {
   const updateUserLocation = async (userId: string, gender?: string) => {
     try {
       const coords = await getCurrentPosition();
-      await updateDoc(doc(db, 'users', userId), { lat: coords.lat, lng: coords.lng });
+      const updates: Partial<UserProfile> = { lat: coords.lat, lng: coords.lng };
+      try {
+        const { city, country } = await reverseGeocode(coords.lat, coords.lng);
+        updates.location = `${city}, ${country}`;
+        updates.country = country;
+        updates.locationVerified = true;
+      } catch {}
+      await updateDoc(doc(db, 'users', userId), updates);
+      setCurrentUser(prev => prev ? { ...prev, ...updates } : prev);
       loadProfiles(userId, coords, gender);
     } catch { loadProfiles(userId, null, gender); }
   };
@@ -98,15 +108,34 @@ const App: React.FC = () => {
         realUsers.push({ ...data, interests: data.interests || [], images: data.images || [], distance });
       });
       realUsers.sort((a, b) => (a.distance || 9999) - (b.distance || 9999));
-
-      // Filtre par genre — hétérosexuel
-      const lookingForGender = myGender === "homme" ? "femme" : myGender === "femme" ? "homme" : null;
-      const filteredReal = lookingForGender ? realUsers.filter(u => !u.gender || u.gender === lookingForGender) : realUsers;
-      const filteredDemo = lookingForGender ? DEMO_PROFILES.filter(d => d.gender === lookingForGender) : DEMO_PROFILES;
-
-      setProfiles([...filteredReal, ...filteredDemo]);
-    } catch { setProfiles(DEMO_PROFILES); }
+      setAllRealUsers(realUsers);
+    } catch { setAllRealUsers([]); }
   };
+
+  // Profils près de chez soi en premier, puis le reste de la diaspora.
+  // Le filtre par pays (recherche premium) s'applique au-dessus de ce tri.
+  useEffect(() => {
+    const myGender = currentUser?.gender;
+    const lookingForGender = myGender === 'homme' ? 'femme' : myGender === 'femme' ? 'homme' : null;
+    let filteredReal = lookingForGender ? allRealUsers.filter(u => !u.gender || u.gender === lookingForGender) : allRealUsers;
+    let filteredDemo = lookingForGender ? DEMO_PROFILES.filter(d => d.gender === lookingForGender) : DEMO_PROFILES;
+
+    if (countryFilter) {
+      const needle = countryFilter.trim().toLowerCase();
+      filteredReal = filteredReal.filter(u => (u.country || u.location || '').toLowerCase().includes(needle));
+      filteredDemo = filteredDemo.filter(d => (d.country || d.location || '').toLowerCase().includes(needle));
+    }
+
+    setProfiles([...filteredReal, ...filteredDemo]);
+  }, [allRealUsers, countryFilter, currentUser?.gender]);
+
+  const handleCountrySearch = (country: string): boolean => {
+    if (!currentUser?.isPremium) return false;
+    setCountryFilter(country.trim());
+    return true;
+  };
+
+  const clearCountryFilter = () => setCountryFilter('');
 
   const loadLikesCount = async (userId: string) => {
     try {
@@ -145,7 +174,12 @@ const App: React.FC = () => {
         // Remettre les profils démo quand tout est épuisé
         const gender = currentUser?.gender;
         const lookingFor = gender === 'homme' ? 'femme' : gender === 'femme' ? 'homme' : null;
-        return lookingFor ? DEMO_PROFILES.filter(d => d.gender === lookingFor) : DEMO_PROFILES;
+        let demos = lookingFor ? DEMO_PROFILES.filter(d => d.gender === lookingFor) : DEMO_PROFILES;
+        if (countryFilter) {
+          const needle = countryFilter.trim().toLowerCase();
+          demos = demos.filter(d => (d.country || d.location || '').toLowerCase().includes(needle));
+        }
+        return demos;
       }
       return updated;
     });
@@ -195,7 +229,19 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-1 overflow-y-auto relative bg-gray-50/50">
-        {currentScreen === AppScreen.DISCOVERY && <DiscoveryScreen profiles={profiles} onLike={handleLike} onDislike={handleDislike} onUndo={handleUndo} />}
+        {currentScreen === AppScreen.DISCOVERY && (
+          <DiscoveryScreen
+            profiles={profiles}
+            onLike={handleLike}
+            onDislike={handleDislike}
+            onUndo={handleUndo}
+            lang={lang}
+            isPremium={!!currentUser?.isPremium}
+            countryFilter={countryFilter}
+            onCountrySearch={handleCountrySearch}
+            onClearCountryFilter={clearCountryFilter}
+          />
+        )}
         {currentScreen === AppScreen.LIKES && user && currentUser && <LikesScreen currentUserId={user.uid} currentUserName={currentUser.name} onMatch={handleMatch} />}
         {currentScreen === AppScreen.MESSAGES && <MessagesScreen matches={matches} onSelectChat={openChat} />}
         {currentScreen === AppScreen.PROFILE && currentUser && <ProfileScreen user={currentUser} setUser={setCurrentUser} onSignOut={() => setShowFeedback(true)} />}

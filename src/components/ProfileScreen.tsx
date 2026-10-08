@@ -49,6 +49,12 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
     try { await updateDoc(doc(db, 'users', user.id), { bio }); } catch {}
   };
 
+  const handleTogglePremium = async () => {
+    const isPremium = !user.isPremium;
+    setUser(prev => prev ? { ...prev, isPremium } : null);
+    try { await updateDoc(doc(db, 'users', user.id), { isPremium }); } catch {}
+  };
+
   const handleShareApp = async () => {
     if (navigator.share) {
       await navigator.share({ title: 'Urukundo', text: "Rejoins Urukundo 🇧🇮", url: window.location.href });
@@ -114,8 +120,9 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
       <div className="p-6 space-y-6 flex-1 overflow-y-auto">
         <div className="flex justify-between items-end">
           <h3 className="text-2xl font-bold text-gray-800">{user.name}, {user.age}</h3>
-          <span className="text-sm text-gray-500 px-3 py-1 bg-gray-50 rounded-full border border-gray-100">
+          <span className="text-sm text-gray-500 px-3 py-1 bg-gray-50 rounded-full border border-gray-100 flex items-center gap-1">
             📍 {user.location}
+            {user.locationVerified && <i className="fa-solid fa-circle-check text-green-500 text-xs" title="Position vérifiée"></i>}
           </span>
         </div>
 
@@ -144,6 +151,16 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
         </div>
 
         <div className="bg-gray-50 rounded-2xl overflow-hidden divide-y divide-gray-100 pb-8">
+          <button onClick={handleTogglePremium}
+            className="w-full p-4 flex justify-between items-center hover:bg-gray-100">
+            <div className="flex items-center gap-3">
+              <i className="fa-solid fa-star text-yellow-500"></i>
+              <span className="text-sm text-gray-700">⭐ Compte Premium (test)</span>
+            </div>
+            <div className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors ${user.isPremium ? 'bg-red-500 justify-end' : 'bg-gray-300 justify-start'}`}>
+              <div className="w-5 h-5 bg-white rounded-full shadow"></div>
+            </div>
+          </button>
           <button onClick={() => setSubScreen('discovery')}
             className="w-full p-4 flex justify-between items-center hover:bg-gray-100">
             <div className="flex items-center gap-3">

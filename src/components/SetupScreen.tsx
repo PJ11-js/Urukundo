@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { uploadImage } from '../services/cloudinaryService';
+import { reverseGeocode } from '../services/locationService';
 import { UserProfile } from '../types';
 
 interface Props {
@@ -23,7 +24,9 @@ const T = {
     gender: 'Tu es *', man: '👨 Homme', woman: '👩 Femme',
     lookingFor: 'Tu cherches *',
     detectGPS: '📍 Détecter ma position', detecting: 'Détection...',
-    or: 'ou', cityPlaceholder: 'Entre ta ville...',
+    locationHint: 'Ta position GPS est obligatoire : elle garantit que ta ville affichée est réelle et vérifiée, comme sur Snapchat.',
+    locationError: 'Position refusée ou indisponible. Active la localisation et réessaie.',
+    verified: 'Position vérifiée',
     interests: 'Intérêts (min. 3)', selected: 'sélectionné(s)',
     next: 'Continuer →', join: '🇧🇮 Rejoindre Urukundo !', creating: '⏳ Création...',
     errorInterests: 'Choisis au moins 3 intérêts !', errorGeneral: 'Erreur. Réessaie.',
@@ -37,7 +40,9 @@ const T = {
     gender: 'You are *', man: '👨 Man', woman: '👩 Woman',
     lookingFor: 'Looking for *',
     detectGPS: '📍 Detect my location', detecting: 'Detecting...',
-    or: 'or', cityPlaceholder: 'Enter your city...',
+    locationHint: 'GPS location is required: it guarantees the city shown on your profile is real and verified, like on Snapchat.',
+    locationError: 'Location denied or unavailable. Enable location and try again.',
+    verified: 'Verified location',
     interests: 'Interests (min. 3)', selected: 'selected',
     next: 'Continue →', join: '🇧🇮 Join Urukundo!', creating: '⏳ Creating...',
     errorInterests: 'Choose at least 3 interests!', errorGeneral: 'Error. Try again.',
@@ -53,7 +58,10 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
   const [gender, setGender] = useState<'homme' | 'femme' | ''>('');
   const [lookingFor, setLookingFor] = useState<'homme' | 'femme'>('femme');
   const [location, setLocation] = useState('');
+  const [country, setCountry] = useState('');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState('');
   const [bio, setBio] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
   const [images, setImages] = useState<File[]>([]);
@@ -63,20 +71,23 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
 
   const getGPSLocation = () => {
     setLocationLoading(true);
-    if (!navigator.geolocation) { setLocationLoading(false); return; }
+    setLocationError('');
+    if (!navigator.geolocation) { setLocationLoading(false); setLocationError(t.locationError); return; }
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setCoords({ lat: latitude, lng: longitude });
         try {
-          const { latitude, longitude } = pos.coords;
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
-          const data = await res.json();
-          const city = data.address?.city || data.address?.town || data.address?.village || 'Position détectée';
-          const country = data.address?.country || '';
-          setLocation(`${city}, ${country}`);
-        } catch { setLocation('Position détectée'); }
+          const { city, country: detectedCountry } = await reverseGeocode(latitude, longitude);
+          setLocation(`${city}, ${detectedCountry}`);
+          setCountry(detectedCountry);
+        } catch {
+          setLocation('Position détectée');
+          setCountry('');
+        }
         setLocationLoading(false);
       },
-      () => { setLocationLoading(false); }
+      () => { setLocationLoading(false); setLocationError(t.locationError); }
     );
   };
 
@@ -116,6 +127,10 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
         age: parseInt(age),
         bio: bio.trim() || `Amahoro ! ${lang === 'fr' ? 'Je suis' : 'I am'} ${name.trim()} 🇧🇮`,
         location: location || 'Non précisé',
+        country,
+        locationVerified: !!coords,
+        lat: coords?.lat,
+        lng: coords?.lng,
         images: uploadedUrls,
         interests,
         photoURL: uploadedUrls[0] || '',
@@ -204,22 +219,17 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
 
         {step === 2 && (
           <div className="space-y-4">
+            <p className="text-xs text-gray-400">{t.locationHint}</p>
             <button onClick={getGPSLocation} disabled={locationLoading}
               className="w-full py-4 bg-red-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-50">
               <i className="fa-solid fa-location-dot"></i>
               {locationLoading ? t.detecting : t.detectGPS}
             </button>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-px bg-gray-200"></div>
-              <span className="text-xs text-gray-400">{t.or}</span>
-              <div className="flex-1 h-px bg-gray-200"></div>
-            </div>
-            <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder={t.cityPlaceholder}
-              className="w-full p-4 bg-gray-50 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-red-200" />
-            {location && (
+            {locationError && <p className="text-red-500 text-sm">{locationError}</p>}
+            {location && coords && (
               <div className="p-3 bg-green-50 rounded-2xl flex items-center gap-2">
-                <i className="fa-solid fa-check text-green-500"></i>
-                <span className="text-sm text-green-700 font-medium">📍 {location}</span>
+                <i className="fa-solid fa-check-circle text-green-500"></i>
+                <span className="text-sm text-green-700 font-medium">📍 {location} — {t.verified} ✓</span>
               </div>
             )}
           </div>
@@ -246,7 +256,7 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
       <div className="p-6 border-t border-gray-100">
         {step < 3 ? (
           <button onClick={() => setStep(s => s + 1)}
-            disabled={(step === 1 && (!name.trim() || !age || !gender)) || (step === 2 && !location)}
+            disabled={(step === 1 && (!name.trim() || !age || !gender)) || (step === 2 && !coords)}
             className="w-full py-4 bg-red-500 text-white rounded-2xl font-bold disabled:opacity-40 active:scale-95 transition-all">
             {t.next}
           </button>
