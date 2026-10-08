@@ -87,7 +87,8 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
         }
         setLocationLoading(false);
       },
-      () => { setLocationLoading(false); setLocationError(t.locationError); }
+      () => { setLocationLoading(false); setLocationError(t.locationError); },
+      { timeout: 15000, maximumAge: 0, enableHighAccuracy: true }
     );
   };
 

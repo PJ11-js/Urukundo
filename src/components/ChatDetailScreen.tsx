@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, setDoc, updateDoc, deleteField } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ChatSession, UserProfile } from '../types';
 import { getConversationStarter } from '../services/geminiService';
 import { notifyUser } from '../services/pushService';
+import { calculateDistance } from '../services/locationService';
+import LiveLocationMap from './LiveLocationMap';
 
 interface Props {
   session: ChatSession;
@@ -26,16 +28,30 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   const [showMenu, setShowMenu] = useState(false);
   const [showReportReasons, setShowReportReasons] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
+  const [matchData, setMatchData] = useState<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const lastSentAtRef = useRef(0);
   const chatId = [currentUserId, session.partner.id].sort().join('_');
 
   const T = {
-    fr: { matched: 'Vous avez matché 🎉 Amahoro !', placeholder: 'Écris un message...', wingman: 'AI WINGMAN : SUGGÈRE UNE ACCROCHE', thinking: 'Réflexion...', whatsappPrompt: 'Entre ton numéro WhatsApp :', call: 'Appeler', report: 'Signaler', block: 'Bloquer', cancel: 'Annuler', reportTitle: 'Pourquoi signaler ce profil ?', blockTitle: 'Bloquer ce profil ?', blockBody: "Cette personne ne pourra plus voir ton profil, ni toi le sien.", blockConfirm: 'Bloquer' },
-    en: { matched: 'You matched 🎉 Amahoro!', placeholder: 'Type a message...', wingman: 'AI WINGMAN: SUGGEST AN OPENER', thinking: 'Thinking...', whatsappPrompt: 'Enter your WhatsApp number:', call: 'Call', report: 'Report', block: 'Block', cancel: 'Cancel', reportTitle: 'Why are you reporting this profile?', blockTitle: 'Block this profile?', blockBody: "This person won't be able to see your profile, or you theirs.", blockConfirm: 'Block' }
+    fr: { matched: 'Vous avez matché 🎉 Amahoro !', placeholder: 'Écris un message...', wingman: 'AI WINGMAN : SUGGÈRE UNE ACCROCHE', thinking: 'Réflexion...', whatsappPrompt: 'Entre ton numéro WhatsApp :', call: 'Appeler', report: 'Signaler', block: 'Bloquer', cancel: 'Annuler', reportTitle: 'Pourquoi signaler ce profil ?', blockTitle: 'Bloquer ce profil ?', blockBody: "Cette personne ne pourra plus voir ton profil, ni toi le sien.", blockConfirm: 'Bloquer',
+      shareLocation: 'Partager ma position en direct', stopSharing: 'Arrêter le partage de position',
+      waitingPartner: (name: string) => `En attente que ${name} active aussi le partage 📍`,
+      locationDenied: 'Position refusée. Active la localisation pour partager.' },
+    en: { matched: 'You matched 🎉 Amahoro!', placeholder: 'Type a message...', wingman: 'AI WINGMAN: SUGGEST AN OPENER', thinking: 'Thinking...', whatsappPrompt: 'Enter your WhatsApp number:', call: 'Call', report: 'Report', block: 'Block', cancel: 'Cancel', reportTitle: 'Why are you reporting this profile?', blockTitle: 'Block this profile?', blockBody: "This person won't be able to see your profile, or you theirs.", blockConfirm: 'Block',
+      shareLocation: 'Share my live location', stopSharing: 'Stop sharing location',
+      waitingPartner: (name: string) => `Waiting for ${name} to also enable sharing 📍`,
+      locationDenied: 'Location denied. Enable it to share.' }
   };
   const t = T[lang];
   const reportReasons = lang === 'fr' ? REPORT_REASONS_FR : REPORT_REASONS_EN;
+
+  const myLiveLocationOn = !!matchData?.liveLocation?.[currentUserId];
+  const partnerLiveLocationOn = !!matchData?.liveLocation?.[session.partner.id];
+  const myCoords = matchData?.liveCoords?.[currentUserId];
+  const partnerCoords = matchData?.liveCoords?.[session.partner.id];
 
   useEffect(() => {
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
@@ -45,6 +61,55 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
     });
     return () => unsub();
   }, [chatId]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'matches', chatId), (snap) => setMatchData(snap.data() || null), () => {});
+    return () => unsub();
+  }, [chatId]);
+
+  // Suivi GPS tant que CE chat est ouvert et que le partage est activé — pas de
+  // suivi en arrière-plan (limite des navigateurs, pas un choix de design).
+  useEffect(() => {
+    if (!myLiveLocationOn || session.partner.isDemo) return;
+    if (!navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        const now = Date.now();
+        if (now - lastSentAtRef.current < 15000) return; // throttle les écritures Firestore
+        lastSentAtRef.current = now;
+        updateDoc(doc(db, 'matches', chatId), {
+          [`liveCoords.${currentUserId}`]: { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: Date.now() },
+        }).catch(() => {});
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    );
+    watchIdRef.current = id;
+    return () => { navigator.geolocation.clearWatch(id); watchIdRef.current = null; };
+  }, [myLiveLocationOn, chatId, currentUserId, session.partner.isDemo]);
+
+  const toggleLiveLocation = async () => {
+    if (myLiveLocationOn) {
+      await updateDoc(doc(db, 'matches', chatId), {
+        [`liveLocation.${currentUserId}`]: deleteField(),
+        [`liveCoords.${currentUserId}`]: deleteField(),
+      }).catch(() => {});
+    } else {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          lastSentAtRef.current = Date.now();
+          await updateDoc(doc(db, 'matches', chatId), {
+            [`liveLocation.${currentUserId}`]: true,
+            [`liveCoords.${currentUserId}`]: { lat: pos.coords.latitude, lng: pos.coords.longitude, updatedAt: Date.now() },
+          }).catch(() => {});
+        },
+        () => alert(t.locationDenied),
+        { enableHighAccuracy: true }
+      );
+    }
+    setShowMenu(false);
+  };
 
   const handleSend = async () => {
     if (!inputText.trim()) return;
@@ -112,6 +177,13 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
                 <div className="absolute right-0 top-10 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-20" style={{ minWidth: 140 }}>
+                  {!session.partner.isDemo && (
+                    <button onClick={toggleLiveLocation}
+                      className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100">
+                      <i className={`fa-solid fa-location-dot ${myLiveLocationOn ? 'text-blue-500' : 'text-gray-400'}`}></i>
+                      {myLiveLocationOn ? t.stopSharing : t.shareLocation}
+                    </button>
+                  )}
                   {onReport && (
                     <button onClick={() => { setShowReportReasons(true); setShowMenu(false); }}
                       className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
@@ -179,6 +251,21 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
         <div className="text-center py-4">
           <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">{t.matched}</p>
         </div>
+
+        {myLiveLocationOn && !partnerLiveLocationOn && (
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3 text-xs text-blue-600 font-medium text-center">
+            {t.waitingPartner(session.partner.name)}
+          </div>
+        )}
+
+        {myLiveLocationOn && partnerLiveLocationOn && myCoords && partnerCoords && (
+          <LiveLocationMap
+            me={myCoords}
+            partner={partnerCoords}
+            partnerName={session.partner.name}
+            distanceKm={calculateDistance(myCoords.lat, myCoords.lng, partnerCoords.lat, partnerCoords.lng)}
+          />
+        )}
         {messages.map(msg => {
           const isMe = msg.senderId === currentUserId;
           return (
