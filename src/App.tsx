@@ -56,7 +56,7 @@ const App: React.FC = () => {
         const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data() as UserProfile;
-          setCurrentUser(userData);
+          setCurrentUser({ ...userData, interests: userData.interests || [], images: userData.images || [] });
           if (userData.lang) setLang(userData.lang);
           setNeedsSetup(false);
           loadLikesCount(firebaseUser.uid);
@@ -95,7 +95,7 @@ const App: React.FC = () => {
         if (data.id === userId) return;
         let distance: number | undefined;
         if (coords && data.lat && data.lng) distance = calculateDistance(coords.lat, coords.lng, data.lat, data.lng);
-        realUsers.push({ ...data, distance });
+        realUsers.push({ ...data, interests: data.interests || [], images: data.images || [], distance });
       });
       realUsers.sort((a, b) => (a.distance || 9999) - (b.distance || 9999));
 
@@ -120,7 +120,8 @@ const App: React.FC = () => {
     if (user) {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       if (userDoc.exists()) {
-        setCurrentUser(userDoc.data() as UserProfile);
+        const userData = userDoc.data() as UserProfile;
+        setCurrentUser({ ...userData, interests: userData.interests || [], images: userData.images || [] });
         setNeedsSetup(false);
         loadLikesCount(user.uid);
         updateUserLocation(user.uid);

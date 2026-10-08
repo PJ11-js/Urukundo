@@ -4,8 +4,10 @@ export const calculateCompatibility = (user: UserProfile, candidate: UserProfile
   let score = 0;
 
   // Intérêts communs (50% du score)
-  const commonInterests = user.interests.filter(i => candidate.interests.includes(i));
-  score += (commonInterests.length / Math.max(user.interests.length, 1)) * 50;
+  const userInterests = user.interests || [];
+  const candidateInterests = candidate.interests || [];
+  const commonInterests = userInterests.filter(i => candidateInterests.includes(i));
+  score += (commonInterests.length / Math.max(userInterests.length, 1)) * 50;
 
   // Distance (30% du score) — plus proche = meilleur score
   if (candidate.distance !== undefined) {
@@ -16,7 +18,7 @@ export const calculateCompatibility = (user: UserProfile, candidate: UserProfile
   }
 
   // Tranche d'âge proche (20% du score)
-  const ageDiff = Math.abs(user.age - candidate.age);
+  const ageDiff = Math.abs((user.age || 0) - (candidate.age || 0));
   if (ageDiff < 3) score += 20;
   else if (ageDiff < 7) score += 15;
   else if (ageDiff < 10) score += 10;

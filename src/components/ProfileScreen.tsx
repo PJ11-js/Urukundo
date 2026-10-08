@@ -137,7 +137,7 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
         <div>
           <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-3">Centres d'intérêt</label>
           <div className="flex flex-wrap gap-2">
-            {user.interests.map(i => (
+            {(user.interests || []).map(i => (
               <span key={i} className="px-4 py-1.5 bg-red-50 text-red-600 rounded-full text-xs font-medium border border-red-100">{i}</span>
             ))}
           </div>

@@ -290,7 +290,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
               <p className="mt-1 text-xs line-clamp-2 opacity-80">{currentProfile.bio}</p>
               <div className="flex flex-wrap gap-1 mt-2">
                 {currentProfile.interests?.slice(0, 3).map(i => (
-                  <span key={i} className="text-xs bg.white/20 px-2 py-0.5 rounded-full">
+                  <span key={i} className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
                     {i}
                   </span>
                 ))}
