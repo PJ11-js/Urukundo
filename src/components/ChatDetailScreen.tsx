@@ -3,6 +3,7 @@ import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, s
 import { db } from '../firebase';
 import { ChatSession, UserProfile } from '../types';
 import { getConversationStarter } from '../services/geminiService';
+import { notifyUser } from '../services/pushService';
 
 interface Props {
   session: ChatSession;
@@ -54,6 +55,9 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
         senderId: currentUserId, text, timestamp: serverTimestamp(),
       });
       setDoc(doc(db, 'matches', chatId), { lastMessageText: text, lastMessageSenderId: currentUserId, lastMessageAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      if (!session.partner.isDemo) {
+        notifyUser(session.partner.id, lang === 'fr' ? '💬 Nouveau message' : '💬 New message', text);
+      }
     } catch (err) { console.error(err); }
   };
 

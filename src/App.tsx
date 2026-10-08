@@ -5,6 +5,7 @@ import { auth, db } from './firebase';
 import { AppScreen, UserProfile, ChatSession } from './types';
 import { getCurrentPosition, calculateDistance, reverseGeocode } from './services/locationService';
 import { calculateCompatibility, isMatch } from './services/matchingService';
+import { registerPush, notifyUser } from './services/pushService';
 import LoginScreen from './components/LoginScreen';
 import LegalScreen from './components/LegalScreen';
 import SetupScreen from './components/SetupScreen';
@@ -77,6 +78,7 @@ const App: React.FC = () => {
           setNeedsSetup(false);
           likesUnsubRef.current?.();
           likesUnsubRef.current = loadLikesCount(firebaseUser.uid);
+          registerPush(firebaseUser.uid);
           const userData2 = userDoc.data() as UserProfile;
           updateUserLocation(firebaseUser.uid, userData2.gender);
           // Marquer en ligne
@@ -191,6 +193,11 @@ const App: React.FC = () => {
   const createMatch = async (myUid: string, partner: UserProfile) => {
     const matchId = matchDocId(myUid, partner.id);
     await setDoc(doc(db, 'matches', matchId), { users: [myUid, partner.id], createdAt: serverTimestamp() }, { merge: true });
+    if (!partner.isDemo) {
+      const name = currentUser?.name || (lang === 'fr' ? 'Quelqu\'un' : 'Someone');
+      notifyUser(partner.id, lang === 'fr' ? 'Nouveau match ! 🇧🇮' : 'New match! 🇧🇮',
+        lang === 'fr' ? `${name} et toi avez matché sur Urukundo` : `You and ${name} matched on Urukundo`);
+    }
   };
 
   // Écoute en temps réel des matchs persistés (survit aux rechargements,
@@ -232,6 +239,7 @@ const App: React.FC = () => {
         setNeedsSetup(false);
         likesUnsubRef.current?.();
         likesUnsubRef.current = loadLikesCount(user.uid);
+        registerPush(user.uid);
         updateUserLocation(user.uid);
       }
     }

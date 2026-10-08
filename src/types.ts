@@ -27,6 +27,7 @@ export interface UserProfile {
   lastSuperLikeAt?: number;
   lastBoostAt?: number;
   boostedUntil?: number;
+  fcmTokens?: string[];
 }
 
 export interface Message {

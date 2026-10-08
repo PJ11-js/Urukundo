@@ -70,12 +70,16 @@
     <div id="root"></div>
     <script type="module" src="/src/index.tsx"></script>
     <script>
-      // Désinscrire TOUS les service workers
+      // Désinscrire les anciens service workers (cause du bug d'écran blanc),
+      // mais garder celui des notifications push (firebase-messaging-sw.js).
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(regs => {
           regs.forEach(reg => {
-            reg.unregister();
-            console.log('SW unregistered');
+            const url = reg.active?.scriptURL || reg.installing?.scriptURL || reg.waiting?.scriptURL || '';
+            if (!url.includes('firebase-messaging-sw.js')) {
+              reg.unregister();
+              console.log('SW unregistered:', url);
+            }
           });
         });
       }
