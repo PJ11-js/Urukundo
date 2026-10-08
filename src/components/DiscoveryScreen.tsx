@@ -11,16 +11,30 @@ interface Props {
   countryFilter?: string;
   onCountrySearch?: (country: string) => boolean;
   onClearCountryFilter?: () => void;
+  onReport?: (profile: UserProfile, reason: string) => void;
+  onBlock?: (profile: UserProfile) => void;
+  canSuperLike?: () => boolean;
+  onSuperLike?: (profile: UserProfile) => void;
+  boostActive?: boolean;
+  onBoost?: () => boolean;
 }
 
-const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo, lang = 'fr', isPremium = false, countryFilter = '', onCountrySearch, onClearCountryFilter }) => {
+const REPORT_REASONS = ['Faux profil', 'Contenu inapproprié', 'Harcèlement', 'Autre'];
+
+const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo, lang = 'fr', isPremium = false, countryFilter = '', onCountrySearch, onClearCountryFilter, onReport, onBlock, canSuperLike, onSuperLike, boostActive = false, onBoost }) => {
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
-  const [swipeAnim, setSwipeAnim] = useState<'like' | 'nope' | null>(null);
+  const [swipeAnim, setSwipeAnim] = useState<'like' | 'nope' | 'super' | null>(null);
   const [showCountrySearch, setShowCountrySearch] = useState(false);
   const [countryInput, setCountryInput] = useState('');
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showCardMenu, setShowCardMenu] = useState(false);
+  const [showReportReasons, setShowReportReasons] = useState(false);
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
+  const [showSuperLikePaywall, setShowSuperLikePaywall] = useState(false);
+  const [showBoostPaywall, setShowBoostPaywall] = useState(false);
+  const [boostToast, setBoostToast] = useState<string | null>(null);
 
   const startX = useRef(0);
   const animating = useRef(false);
@@ -40,6 +54,15 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
       search: 'Chercher', clear: 'Réinitialiser', premiumTitle: '🔒 Fonctionnalité Premium',
       premiumBody: "Passe Premium pour chercher des profils burundais dans n'importe quel pays (Canada, France, Belgique...).",
       premiumClose: 'Compris',
+      report: 'Signaler', block: 'Bloquer', cancel: 'Annuler',
+      reportTitle: 'Pourquoi signaler ce profil ?',
+      blockTitle: 'Bloquer ce profil ?', blockBody: "Cette personne ne pourra plus voir ton profil, ni toi le sien.",
+      blockConfirm: 'Bloquer',
+      superLikeTitle: '⭐ Plus de Super Like',
+      superLikeBody: "Tu as utilisé ton Super Like gratuit du jour. Reviens demain ou passe Premium pour un accès illimité.",
+      boostTitle: '⚡ Boost indisponible',
+      boostBody: "Tu as déjà utilisé ton Boost gratuit du jour (ou il est encore actif). Reviens demain ou passe Premium pour un accès illimité.",
+      boostOn: 'Boost activé pendant 30 minutes ⚡', boostRunning: 'Boost déjà actif ⚡',
     },
     en: {
       noMore: 'No more profiles', comeback: 'Come back later!', reload: 'Reload', ia: 'AI prototype', online: 'Online',
@@ -47,6 +70,15 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
       search: 'Search', clear: 'Reset', premiumTitle: '🔒 Premium feature',
       premiumBody: 'Go Premium to search Burundian profiles in any country (Canada, France, Belgium...).',
       premiumClose: 'Got it',
+      report: 'Report', block: 'Block', cancel: 'Cancel',
+      reportTitle: 'Why are you reporting this profile?',
+      blockTitle: 'Block this profile?', blockBody: "This person won't be able to see your profile, or you theirs.",
+      blockConfirm: 'Block',
+      superLikeTitle: '⭐ No Super Likes left',
+      superLikeBody: "You've used your free daily Super Like. Come back tomorrow or go Premium for unlimited access.",
+      boostTitle: '⚡ Boost unavailable',
+      boostBody: "You've already used your free daily Boost (or it's still active). Come back tomorrow or go Premium for unlimited access.",
+      boostOn: 'Boost activated for 30 minutes ⚡', boostRunning: 'Boost already active ⚡',
     }
   };
   const t = T[lang];
@@ -78,6 +110,21 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
     setSwipeAnim(null);
     setDragX(0);
     dragXRef.current = 0;
+    setShowCardMenu(false);
+    setShowReportReasons(false);
+    setShowBlockConfirm(false);
+  };
+
+  const submitReport = (profile: UserProfile, reason: string) => {
+    onReport?.(profile, reason);
+    setShowReportReasons(false);
+    setShowCardMenu(false);
+  };
+
+  const confirmBlock = (profile: UserProfile) => {
+    onBlock?.(profile);
+    setShowBlockConfirm(false);
+    setShowCardMenu(false);
   };
 
   const triggerLike = (profile: UserProfile) => {
@@ -100,6 +147,25 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
       resetCardState();
       animating.current = false;
     }, 350);
+  };
+
+  const triggerSuperLike = (profile: UserProfile) => {
+    if (animating.current) return;
+    if (canSuperLike && !canSuperLike()) { setShowSuperLikePaywall(true); return; }
+    animating.current = true;
+    setSwipeAnim('super');
+    setTimeout(() => {
+      onSuperLike?.(profile);
+      resetCardState();
+      animating.current = false;
+    }, 350);
+  };
+
+  const triggerBoost = () => {
+    if (boostActive) { setBoostToast(t.boostRunning); setTimeout(() => setBoostToast(null), 2000); return; }
+    const ok = onBoost?.();
+    if (ok) { setBoostToast(t.boostOn); setTimeout(() => setBoostToast(null), 2500); }
+    else setShowBoostPaywall(true);
   };
 
   // Souris (desktop)
@@ -199,9 +265,11 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
 
   const photos = currentProfile.images?.length > 0 ? currentProfile.images : [];
   const cardTranslateX = swipeAnim === 'like' ? 600 : swipeAnim === 'nope' ? -600 : dragX;
+  const cardTranslateY = swipeAnim === 'super' ? -700 : 0;
   const cardRotation = swipeAnim === 'like' ? 35 : swipeAnim === 'nope' ? -35 : dragX * 0.06;
   const likeOpacity = swipeAnim === 'like' ? 1 : Math.min(1, dragX / 60);
   const nopeOpacity = swipeAnim === 'nope' ? 1 : Math.min(1, -dragX / 60);
+  const superOpacity = swipeAnim === 'super' ? 1 : 0;
 
   return (
     <div className="h-full flex flex-col bg-white select-none">
@@ -253,6 +321,36 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
         </div>
       )}
 
+      {showReportReasons && currentProfile && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setShowReportReasons(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-3" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800">{t.reportTitle}</h3>
+            <div className="space-y-2">
+              {REPORT_REASONS.map(reason => (
+                <button key={reason} onClick={() => submitReport(currentProfile, reason)}
+                  className="w-full py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-xl text-left text-sm text-gray-700">
+                  {reason}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setShowReportReasons(false)} className="w-full py-2 text-sm text-gray-400">{t.cancel}</button>
+          </div>
+        </div>
+      )}
+
+      {showBlockConfirm && currentProfile && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setShowBlockConfirm(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center space-y-3" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800">{t.blockTitle}</h3>
+            <p className="text-sm text-gray-500">{t.blockBody}</p>
+            <button onClick={() => confirmBlock(currentProfile)} className="mt-2 w-full py-3 bg-red-500 text-white rounded-2xl font-bold">
+              {t.blockConfirm}
+            </button>
+            <button onClick={() => setShowBlockConfirm(false)} className="w-full py-2 text-sm text-gray-400">{t.cancel}</button>
+          </div>
+        </div>
+      )}
+
       <div className="relative flex-1 p-4 pb-0">
         {/* Carte suivante */}
         {nextProfile && (
@@ -285,7 +383,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
         >
           <div
             style={{
-              transform: `translateX(${cardTranslateX}px) rotate(${cardRotation}deg)`,
+              transform: `translate(${cardTranslateX}px, ${cardTranslateY}px) rotate(${cardRotation}deg)`,
               transition: isDragging ? 'none' : 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
               willChange: 'transform',
               height: '100%',
@@ -332,6 +430,33 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
               />
             </div>
 
+            {(onReport || onBlock) && (
+              <div className="absolute top-3 right-3">
+                <button
+                  onClick={() => setShowCardMenu(v => !v)}
+                  className="w-8 h-8 rounded-full bg-black/40 text-white flex items-center justify-center"
+                >
+                  <i className="fa-solid fa-ellipsis"></i>
+                </button>
+                {showCardMenu && (
+                  <div className="absolute right-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden" style={{ minWidth: 140 }}>
+                    {onReport && (
+                      <button onClick={() => { setShowReportReasons(true); setShowCardMenu(false); }}
+                        className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                        <i className="fa-solid fa-flag text-orange-500"></i> {t.report}
+                      </button>
+                    )}
+                    {onBlock && (
+                      <button onClick={() => { setShowBlockConfirm(true); setShowCardMenu(false); }}
+                        className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-gray-100">
+                        <i className="fa-solid fa-ban"></i> {t.block}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div
               style={{ opacity: likeOpacity }}
               className="absolute top-8 left-6 border-4 border-green-400 text-green-400 px-4 py-1 rounded-xl rotate-[-20deg] text-2xl font-black pointer-events-none"
@@ -343,6 +468,14 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
               className="absolute top-8 right-6 border-4 border-red-400 text-red-400 px-4 py-1 rounded-xl rotate-[20deg] text-2xl font-black pointer-events-none"
             >
               NOPE ❌
+            </div>
+            <div
+              style={{ opacity: superOpacity }}
+              className="absolute top-1/2 left-0 right-0 -translate-y-1/2 flex justify-center pointer-events-none"
+            >
+              <span className="border-4 border-blue-400 text-blue-400 bg-white/90 px-4 py-1 rounded-xl text-2xl font-black">
+                SUPER LIKE ⭐
+              </span>
             </div>
 
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-5 text-white pointer-events-none">
@@ -378,6 +511,12 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
                   </span>
                 ))}
               </div>
+              {currentProfile.prompts?.[0] && (
+                <div className="mt-2 bg-white/15 rounded-xl px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wide opacity-70">{currentProfile.prompts[0].question}</p>
+                  <p className="text-xs font-medium mt-0.5 line-clamp-2">{currentProfile.prompts[0].answer}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -399,6 +538,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
           <i className="fa-solid fa-xmark text-2xl"></i>
         </button>
         <button
+          onClick={() => currentProfile && triggerSuperLike(currentProfile)}
           className="w-12 h-12 rounded-full border-2 border-purple-100 text-purple-500 flex items-center justify-center shadow-md bg-white active:scale-95 transition-transform"
         >
           <i className="fa-solid fa-star text-lg"></i>
@@ -411,11 +551,44 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
           <i className="fa-solid fa-heart text-2xl"></i>
         </button>
         <button
-          className="w-12 h-12 rounded-full border-2 border-orange-100 text-orange-500 flex items-center justify-center shadow-md bg-white active:scale-95 transition-transform"
+          onClick={triggerBoost}
+          className={`w-12 h-12 rounded-full border-2 flex items-center justify-center shadow-md active:scale-95 transition-transform ${boostActive ? 'border-orange-500 bg-orange-500 text-white' : 'border-orange-100 text-orange-500 bg-white'}`}
         >
           <i className="fa-solid fa-bolt text-lg"></i>
         </button>
       </div>
+
+      {boostToast && (
+        <div className="fixed bottom-24 left-0 right-0 flex justify-center z-50 pointer-events-none">
+          <div className="bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg">
+            {boostToast}
+          </div>
+        </div>
+      )}
+
+      {showSuperLikePaywall && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setShowSuperLikePaywall(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center space-y-3" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800">{t.superLikeTitle}</h3>
+            <p className="text-sm text-gray-500">{t.superLikeBody}</p>
+            <button onClick={() => setShowSuperLikePaywall(false)} className="mt-2 w-full py-3 bg-gradient-to-r from-red-600 to-green-600 text-white rounded-2xl font-bold">
+              {t.premiumClose}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showBoostPaywall && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setShowBoostPaywall(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center space-y-3" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800">{t.boostTitle}</h3>
+            <p className="text-sm text-gray-500">{t.boostBody}</p>
+            <button onClick={() => setShowBoostPaywall(false)} className="mt-2 w-full py-3 bg-gradient-to-r from-red-600 to-green-600 text-white rounded-2xl font-bold">
+              {t.premiumClose}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

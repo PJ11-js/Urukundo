@@ -21,6 +21,12 @@ export interface UserProfile {
   lng?: number;
   isPremium?: boolean;
   theme?: 'light' | 'dark' | 'soft';
+  hidden?: boolean;
+  settings?: { ageMin: number; ageMax: number; distance: number; gender: 'hommes' | 'femmes' | 'tous' };
+  prompts?: { question: string; answer: string }[];
+  lastSuperLikeAt?: number;
+  lastBoostAt?: number;
+  boostedUntil?: number;
 }
 
 export interface Message {

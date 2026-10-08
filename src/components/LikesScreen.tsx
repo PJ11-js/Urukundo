@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { UserProfile, ChatSession } from '../types';
+import { UserProfile } from '../types';
 
 interface Props {
   currentUserId: string;
   currentUserName: string;
-  onMatch: (session: ChatSession) => void;
+  onMatch: (partner: UserProfile) => void;
 }
 
 const LikesScreen: React.FC<Props> = ({ currentUserId, currentUserName, onMatch }) => {
-  const [likers, setLikers] = useState<UserProfile[]>([]);
+  const [likers, setLikers] = useState<(UserProfile & { isSuper?: boolean })[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,12 +18,13 @@ const LikesScreen: React.FC<Props> = ({ currentUserId, currentUserName, onMatch 
       try {
         const q = query(collection(db, 'likes'), where('toUserId', '==', currentUserId));
         const snapshot = await getDocs(q);
-        const likerIds = snapshot.docs.map(d => ({ likeId: d.id, fromUserId: d.data().fromUserId }));
-        const profiles: (UserProfile & { likeId: string })[] = [];
-        for (const { likeId, fromUserId } of likerIds) {
+        const likerIds = snapshot.docs.map(d => ({ likeId: d.id, fromUserId: d.data().fromUserId, isSuper: d.data().type === 'super' }));
+        const profiles: (UserProfile & { likeId: string; isSuper?: boolean })[] = [];
+        for (const { likeId, fromUserId, isSuper } of likerIds) {
           const userSnap = await getDocs(query(collection(db, 'users'), where('id', '==', fromUserId)));
-          userSnap.forEach(d => profiles.push({ ...(d.data() as UserProfile), likeId }));
+          userSnap.forEach(d => profiles.push({ ...(d.data() as UserProfile), likeId, isSuper }));
         }
+        profiles.sort((a, b) => (b.isSuper ? 1 : 0) - (a.isSuper ? 1 : 0));
         setLikers(profiles);
       } catch (err) {
         console.error(err);
@@ -40,12 +41,7 @@ const LikesScreen: React.FC<Props> = ({ currentUserId, currentUserName, onMatch 
         toUserId: profile.id,
         timestamp: serverTimestamp(),
       });
-      const newSession: ChatSession = {
-        id: `session-${Date.now()}`,
-        partner: profile,
-        messages: [{ id: 'm1', senderId: profile.id, text: `C'est un match ! Amahoro ${currentUserName} ! 🇧🇮`, timestamp: Date.now() }],
-      };
-      onMatch(newSession);
+      onMatch(profile);
       setLikers(prev => prev.filter(l => l.id !== profile.id));
     } catch (err) { console.error(err); }
   };
@@ -91,6 +87,11 @@ const LikesScreen: React.FC<Props> = ({ currentUserId, currentUserName, onMatch 
                 <div className="w-full h-48 bg-gradient-to-br from-red-100 to-green-100 flex items-center justify-center">
                   <span className="text-5xl font-bold text-white">{profile.name[0]}</span>
                 </div>
+              )}
+              {profile.isSuper && (
+                <span className="absolute top-2 left-2 text-[10px] bg-purple-500 text-white px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                  <i className="fa-solid fa-star"></i> SUPER
+                </span>
               )}
               <div className="absolute bottom-12 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
                 <p className="text-white font-bold text-sm">{profile.name}, {profile.age}</p>

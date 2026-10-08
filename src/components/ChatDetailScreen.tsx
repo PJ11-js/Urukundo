@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { ChatSession } from '../types';
+import { ChatSession, UserProfile } from '../types';
 import { getConversationStarter } from '../services/geminiService';
 
 interface Props {
@@ -9,23 +9,32 @@ interface Props {
   currentUserId: string;
   onBack: () => void;
   lang?: 'fr' | 'en';
+  onReport?: (profile: UserProfile, reason: string) => void;
+  onBlock?: (profile: UserProfile) => void;
 }
 
-const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lang = 'fr' }) => {
+const REPORT_REASONS_FR = ['Faux profil', 'Contenu inapproprié', 'Harcèlement', 'Autre'];
+const REPORT_REASONS_EN = ['Fake profile', 'Inappropriate content', 'Harassment', 'Other'];
+
+const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lang = 'fr', onReport, onBlock }) => {
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [showWhatsApp, setShowWhatsApp] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [showMenu, setShowMenu] = useState(false);
+  const [showReportReasons, setShowReportReasons] = useState(false);
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const chatId = [currentUserId, session.partner.id].sort().join('_');
 
   const T = {
-    fr: { matched: 'Vous avez matché 🎉 Amahoro !', placeholder: 'Écris un message...', wingman: 'AI WINGMAN : SUGGÈRE UNE ACCROCHE', thinking: 'Réflexion...', whatsappPrompt: 'Entre ton numéro WhatsApp :', call: 'Appeler' },
-    en: { matched: 'You matched 🎉 Amahoro!', placeholder: 'Type a message...', wingman: 'AI WINGMAN: SUGGEST AN OPENER', thinking: 'Thinking...', whatsappPrompt: 'Enter your WhatsApp number:', call: 'Call' }
+    fr: { matched: 'Vous avez matché 🎉 Amahoro !', placeholder: 'Écris un message...', wingman: 'AI WINGMAN : SUGGÈRE UNE ACCROCHE', thinking: 'Réflexion...', whatsappPrompt: 'Entre ton numéro WhatsApp :', call: 'Appeler', report: 'Signaler', block: 'Bloquer', cancel: 'Annuler', reportTitle: 'Pourquoi signaler ce profil ?', blockTitle: 'Bloquer ce profil ?', blockBody: "Cette personne ne pourra plus voir ton profil, ni toi le sien.", blockConfirm: 'Bloquer' },
+    en: { matched: 'You matched 🎉 Amahoro!', placeholder: 'Type a message...', wingman: 'AI WINGMAN: SUGGEST AN OPENER', thinking: 'Thinking...', whatsappPrompt: 'Enter your WhatsApp number:', call: 'Call', report: 'Report', block: 'Block', cancel: 'Cancel', reportTitle: 'Why are you reporting this profile?', blockTitle: 'Block this profile?', blockBody: "This person won't be able to see your profile, or you theirs.", blockConfirm: 'Block' }
   };
   const t = T[lang];
+  const reportReasons = lang === 'fr' ? REPORT_REASONS_FR : REPORT_REASONS_EN;
 
   useEffect(() => {
     const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
@@ -44,6 +53,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       await addDoc(collection(db, 'chats', chatId, 'messages'), {
         senderId: currentUserId, text, timestamp: serverTimestamp(),
       });
+      setDoc(doc(db, 'matches', chatId), { lastMessageText: text, lastMessageSenderId: currentUserId, lastMessageAt: serverTimestamp() }, { merge: true }).catch(() => {});
     } catch (err) { console.error(err); }
   };
 
@@ -89,7 +99,63 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
           className="w-9 h-9 rounded-full bg-green-500 text-white flex items-center justify-center shadow-md">
           <i className="fa-brands fa-whatsapp text-lg"></i>
         </button>
+        {(onReport || onBlock) && (
+          <div className="relative">
+            <button onClick={() => setShowMenu(v => !v)} className="w-9 h-9 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-50">
+              <i className="fa-solid fa-ellipsis-vertical"></i>
+            </button>
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                <div className="absolute right-0 top-10 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-20" style={{ minWidth: 140 }}>
+                  {onReport && (
+                    <button onClick={() => { setShowReportReasons(true); setShowMenu(false); }}
+                      className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                      <i className="fa-solid fa-flag text-orange-500"></i> {t.report}
+                    </button>
+                  )}
+                  {onBlock && (
+                    <button onClick={() => { setShowBlockConfirm(true); setShowMenu(false); }}
+                      className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-gray-100">
+                      <i className="fa-solid fa-ban"></i> {t.block}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
+
+      {showReportReasons && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setShowReportReasons(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-3" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800">{t.reportTitle}</h3>
+            <div className="space-y-2">
+              {reportReasons.map(reason => (
+                <button key={reason} onClick={() => { onReport?.(session.partner, reason); setShowReportReasons(false); }}
+                  className="w-full py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-xl text-left text-sm text-gray-700">
+                  {reason}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setShowReportReasons(false)} className="w-full py-2 text-sm text-gray-400">{t.cancel}</button>
+          </div>
+        </div>
+      )}
+
+      {showBlockConfirm && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setShowBlockConfirm(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center space-y-3" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800">{t.blockTitle}</h3>
+            <p className="text-sm text-gray-500">{t.blockBody}</p>
+            <button onClick={() => { onBlock?.(session.partner); setShowBlockConfirm(false); }} className="mt-2 w-full py-3 bg-red-500 text-white rounded-2xl font-bold">
+              {t.blockConfirm}
+            </button>
+            <button onClick={() => setShowBlockConfirm(false)} className="w-full py-2 text-sm text-gray-400">{t.cancel}</button>
+          </div>
+        </div>
+      )}
 
       {showWhatsApp && (
         <div className="bg-green-50 p-4 border-b border-green-100 flex-shrink-0">

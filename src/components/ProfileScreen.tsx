@@ -12,10 +12,21 @@ interface Props {
   onSignOut: () => void;
 }
 
+const PROMPT_QUESTIONS = [
+  "Mon rêve le plus fou",
+  "Un fait inutile que j'adore sur moi",
+  "Je cherche quelqu'un qui...",
+  "Ma plus grande fierté",
+  "Le meilleur conseil qu'on m'ait donné",
+  "Un talent caché",
+];
+
 const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [subScreen, setSubScreen] = useState<'main' | 'discovery' | 'safety'>('main');
   const [activePhoto, setActivePhoto] = useState(0);
+  const [showPromptPicker, setShowPromptPicker] = useState(false);
+  const [editingPrompt, setEditingPrompt] = useState<{ index: number; question: string; answer: string } | null>(null);
 
   if (subScreen === 'discovery') return <DiscoverySettingsScreen user={user} setUser={setUser} onBack={() => setSubScreen('main')} />;
   if (subScreen === 'safety') return <SafetyScreen userId={user.id} onBack={() => setSubScreen('main')} onSignOut={onSignOut} />;
@@ -53,6 +64,23 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
     const isPremium = !user.isPremium;
     setUser(prev => prev ? { ...prev, isPremium } : null);
     try { await updateDoc(doc(db, 'users', user.id), { isPremium }); } catch {}
+  };
+
+  const handleSavePrompt = async () => {
+    if (!editingPrompt || !editingPrompt.answer.trim()) return;
+    const prompts = [...(user.prompts || [])];
+    const entry = { question: editingPrompt.question, answer: editingPrompt.answer.trim() };
+    if (editingPrompt.index === -1) prompts.push(entry);
+    else prompts[editingPrompt.index] = entry;
+    setUser(prev => prev ? { ...prev, prompts } : null);
+    setEditingPrompt(null);
+    try { await updateDoc(doc(db, 'users', user.id), { prompts }); } catch {}
+  };
+
+  const handleRemovePrompt = async (index: number) => {
+    const prompts = (user.prompts || []).filter((_, i) => i !== index);
+    setUser(prev => prev ? { ...prev, prompts } : null);
+    try { await updateDoc(doc(db, 'users', user.id), { prompts }); } catch {}
   };
 
   const handleShareApp = async () => {
@@ -150,6 +178,34 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
           </div>
         </div>
 
+        <div>
+          <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-3">Mes prompts</label>
+          <div className="space-y-2">
+            {(user.prompts || []).map((p, i) => (
+              <div key={i} className="p-4 bg-gray-50 rounded-2xl relative pr-20">
+                <p className="text-xs text-red-500 font-bold uppercase mb-1">{p.question}</p>
+                <p className="text-sm text-gray-700">{p.answer}</p>
+                <div className="absolute top-2 right-2 flex gap-1">
+                  <button onClick={() => setEditingPrompt({ index: i, question: p.question, answer: p.answer })}
+                    className="w-7 h-7 rounded-full bg-white shadow flex items-center justify-center text-gray-400">
+                    <i className="fa-solid fa-pen text-xs"></i>
+                  </button>
+                  <button onClick={() => handleRemovePrompt(i)}
+                    className="w-7 h-7 rounded-full bg-white shadow flex items-center justify-center text-red-400">
+                    <i className="fa-solid fa-trash text-xs"></i>
+                  </button>
+                </div>
+              </div>
+            ))}
+            {(user.prompts || []).length < 3 && (
+              <button onClick={() => setShowPromptPicker(true)}
+                className="w-full py-3 border-2 border-dashed border-gray-200 rounded-2xl text-sm text-gray-400 font-medium">
+                + Ajouter un prompt
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="bg-gray-50 rounded-2xl overflow-hidden divide-y divide-gray-100 pb-8">
           <button onClick={handleTogglePremium}
             className="w-full p-4 flex justify-between items-center hover:bg-gray-100">
@@ -183,6 +239,36 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
           </button>
         </div>
       </div>
+
+      {showPromptPicker && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setShowPromptPicker(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-2 max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Choisis une question</h3>
+            {PROMPT_QUESTIONS.filter(q => !(user.prompts || []).some(p => p.question === q)).map(q => (
+              <button key={q} onClick={() => { setEditingPrompt({ index: -1, question: q, answer: '' }); setShowPromptPicker(false); }}
+                className="w-full py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-xl text-left text-sm text-gray-700">
+                {q}
+              </button>
+            ))}
+            <button onClick={() => setShowPromptPicker(false)} className="w-full py-2 text-sm text-gray-400">Annuler</button>
+          </div>
+        </div>
+      )}
+
+      {editingPrompt && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setEditingPrompt(null)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-3" onClick={e => e.stopPropagation()}>
+            <p className="text-xs text-red-500 font-bold uppercase">{editingPrompt.question}</p>
+            <textarea autoFocus className="w-full p-4 bg-gray-50 rounded-2xl text-sm min-h-[100px]" value={editingPrompt.answer}
+              onChange={e => setEditingPrompt(prev => prev ? { ...prev, answer: e.target.value } : prev)}
+              placeholder="Ta réponse..." maxLength={150} />
+            <div className="flex gap-2">
+              <button onClick={() => setEditingPrompt(null)} className="flex-1 py-3 text-sm text-gray-400 font-medium">Annuler</button>
+              <button onClick={handleSavePrompt} className="flex-1 py-3 bg-red-500 text-white rounded-2xl font-bold text-sm">Enregistrer</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

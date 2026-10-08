@@ -5,9 +5,10 @@ interface Props {
   currentScreen: AppScreen;
   onNavigate: (screen: AppScreen) => void;
   matches: ChatSession[];
+  likesCount?: number;
 }
 
-const BottomNav: React.FC<Props> = ({ currentScreen, onNavigate, matches }) => {
+const BottomNav: React.FC<Props> = ({ currentScreen, onNavigate, matches, likesCount = 0 }) => {
   const unreadCount = matches.filter(m => m.messages.length > 0).length;
 
   return (
@@ -16,6 +17,17 @@ const BottomNav: React.FC<Props> = ({ currentScreen, onNavigate, matches }) => {
         onClick={() => onNavigate(AppScreen.DISCOVERY)}
         className={`text-2xl transition-all ${currentScreen === AppScreen.DISCOVERY ? 'text-red-500 scale-110' : 'text-gray-300 hover:text-gray-400'}`}>
         <i className="fa-solid fa-fire"></i>
+      </button>
+
+      <button
+        onClick={() => onNavigate(AppScreen.LIKES)}
+        className={`text-2xl transition-all relative ${currentScreen === AppScreen.LIKES ? 'text-red-500 scale-110' : 'text-gray-300 hover:text-gray-400'}`}>
+        <i className="fa-solid fa-heart"></i>
+        {likesCount > 0 && (
+          <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+            {likesCount > 9 ? '9+' : likesCount}
+          </span>
+        )}
       </button>
 
       <button

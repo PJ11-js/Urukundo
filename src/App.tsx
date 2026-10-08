@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, where, addDoc, serverTimestamp, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { AppScreen, UserProfile, ChatSession } from './types';
 import { getCurrentPosition, calculateDistance, reverseGeocode } from './services/locationService';
@@ -47,6 +47,7 @@ const App: React.FC = () => {
   const [showFeedback, setShowFeedback] = useState(false);
   const [needsGenderUpdate, setNeedsGenderUpdate] = useState(false);
   const [theme, setTheme] = useState<Theme>((localStorage.getItem('urukundo_theme') as Theme) || 'light');
+  const likesUnsubRef = useRef<(() => void) | null>(null);
 
   const handleLangSelect = (l: 'fr' | 'en') => {
     setLang(l);
@@ -74,7 +75,8 @@ const App: React.FC = () => {
           if (userData.lang) setLang(userData.lang);
           if (userData.theme) { setTheme(userData.theme); localStorage.setItem('urukundo_theme', userData.theme); }
           setNeedsSetup(false);
-          loadLikesCount(firebaseUser.uid);
+          likesUnsubRef.current?.();
+          likesUnsubRef.current = loadLikesCount(firebaseUser.uid);
           const userData2 = userDoc.data() as UserProfile;
           updateUserLocation(firebaseUser.uid, userData2.gender);
           // Marquer en ligne
@@ -111,27 +113,56 @@ const App: React.FC = () => {
 
   const loadProfiles = async (userId: string, coords: { lat: number; lng: number } | null, myGender?: string) => {
     try {
-      const snapshot = await getDocs(collection(db, 'users'));
+      const [usersSnap, blockedByMeSnap, blockedMeSnap] = await Promise.all([
+        getDocs(collection(db, 'users')),
+        getDocs(query(collection(db, 'blocks'), where('blockerId', '==', userId))).catch(() => ({ docs: [] } as any)),
+        getDocs(query(collection(db, 'blocks'), where('blockedId', '==', userId))).catch(() => ({ docs: [] } as any)),
+      ]);
+      const blockedIds = new Set<string>([
+        ...blockedByMeSnap.docs.map((d: any) => d.data().blockedId),
+        ...blockedMeSnap.docs.map((d: any) => d.data().blockerId),
+      ]);
       let realUsers: UserProfile[] = [];
-      snapshot.forEach(d => {
+      usersSnap.forEach(d => {
         const data = d.data() as UserProfile & { lat?: number; lng?: number };
         if (data.id === userId) return;
+        if (data.hidden) return;
+        if (blockedIds.has(data.id)) return;
         let distance: number | undefined;
         if (coords && data.lat && data.lng) distance = calculateDistance(coords.lat, coords.lng, data.lat, data.lng);
         realUsers.push({ ...data, interests: data.interests || [], images: data.images || [], distance });
       });
-      realUsers.sort((a, b) => (a.distance || 9999) - (b.distance || 9999));
+      const now = Date.now();
+      realUsers.sort((a, b) => {
+        const aBoost = a.boostedUntil && a.boostedUntil > now ? 1 : 0;
+        const bBoost = b.boostedUntil && b.boostedUntil > now ? 1 : 0;
+        if (aBoost !== bBoost) return bBoost - aBoost;
+        return (a.distance || 9999) - (b.distance || 9999);
+      });
       setAllRealUsers(realUsers);
     } catch { setAllRealUsers([]); }
   };
 
   // Profils près de chez soi en premier, puis le reste de la diaspora.
-  // Le filtre par pays (recherche premium) s'applique au-dessus de ce tri.
+  // Le filtre par pays (recherche premium) et les préférences de découverte
+  // (âge, distance, genre) s'appliquent au-dessus de ce tri.
   useEffect(() => {
     const myGender = currentUser?.gender;
-    const lookingForGender = myGender === 'homme' ? 'femme' : myGender === 'femme' ? 'homme' : null;
+    const settings = currentUser?.settings;
+    const settingsGender = settings?.gender === 'hommes' ? 'homme' : settings?.gender === 'femmes' ? 'femme' : settings?.gender === 'tous' ? null : undefined;
+    const lookingForGender = settingsGender !== undefined ? settingsGender : (myGender === 'homme' ? 'femme' : myGender === 'femme' ? 'homme' : null);
+
     let filteredReal = lookingForGender ? allRealUsers.filter(u => !u.gender || u.gender === lookingForGender) : allRealUsers;
     let filteredDemo = lookingForGender ? DEMO_PROFILES.filter(d => d.gender === lookingForGender) : DEMO_PROFILES;
+
+    if (settings) {
+      filteredReal = filteredReal.filter(u => u.age === undefined || (u.age >= settings.ageMin && u.age <= settings.ageMax));
+      filteredDemo = filteredDemo.filter(d => d.age === undefined || (d.age >= settings.ageMin && d.age <= settings.ageMax));
+      if (settings.distance < 500) {
+        filteredReal = filteredReal.filter(u => u.distance === undefined || u.distance <= settings.distance);
+        filteredDemo = filteredDemo.filter(d => d.distance === undefined || d.distance <= settings.distance);
+      }
+    }
 
     if (countryFilter) {
       const needle = countryFilter.trim().toLowerCase();
@@ -140,7 +171,7 @@ const App: React.FC = () => {
     }
 
     setProfiles([...filteredReal, ...filteredDemo]);
-  }, [allRealUsers, countryFilter, currentUser?.gender]);
+  }, [allRealUsers, countryFilter, currentUser?.gender, currentUser?.settings]);
 
   const handleCountrySearch = (country: string): boolean => {
     if (!currentUser?.isPremium) return false;
@@ -150,13 +181,47 @@ const App: React.FC = () => {
 
   const clearCountryFilter = () => setCountryFilter('');
 
-  const loadLikesCount = async (userId: string) => {
-    try {
-      const q = query(collection(db, 'likes'), where('toUserId', '==', userId));
-      const snapshot = await getDocs(q);
-      setLikesCount(snapshot.size);
-    } catch {}
+  const loadLikesCount = (userId: string) => {
+    const q = query(collection(db, 'likes'), where('toUserId', '==', userId));
+    return onSnapshot(q, snapshot => setLikesCount(snapshot.size), () => {});
   };
+
+  const matchDocId = (a: string, b: string) => [a, b].sort().join('_');
+
+  const createMatch = async (myUid: string, partner: UserProfile) => {
+    const matchId = matchDocId(myUid, partner.id);
+    await setDoc(doc(db, 'matches', matchId), { users: [myUid, partner.id], createdAt: serverTimestamp() }, { merge: true });
+  };
+
+  // Écoute en temps réel des matchs persistés (survit aux rechargements,
+  // et se met à jour tout seul si l'autre personne match pendant que l'app est ouverte).
+  useEffect(() => {
+    if (!user) { setMatches([]); return; }
+    const q = query(collection(db, 'matches'), where('users', 'array-contains', user.uid));
+    const unsub = onSnapshot(q, async (snapshot) => {
+      const sessions = await Promise.all(snapshot.docs.map(async (d): Promise<ChatSession | null> => {
+        const data = d.data() as any;
+        const partnerId = (data.users as string[]).find(id => id !== user.uid);
+        if (!partnerId) return null;
+        let partner: UserProfile | undefined = DEMO_PROFILES.find(p => p.id === partnerId);
+        if (!partner) {
+          try {
+            const pSnap = await getDoc(doc(db, 'users', partnerId));
+            if (pSnap.exists()) partner = pSnap.data() as UserProfile;
+          } catch {}
+        }
+        if (!partner) return null;
+        const previewText = data.lastMessageText || (lang === 'fr' ? `C'est un match ! Amahoro ! 🇧🇮` : `It's a match! Amahoro! 🇧🇮`);
+        const previewSenderId = data.lastMessageSenderId || partner.id;
+        const previewTime = data.lastMessageAt?.toMillis?.() || data.createdAt?.toMillis?.() || Date.now();
+        return { id: d.id, partner, messages: [{ id: 'preview', senderId: previewSenderId, text: previewText, timestamp: previewTime }] };
+      }));
+      const valid = sessions.filter((s): s is ChatSession => s !== null);
+      valid.sort((a, b) => (b.messages[0]?.timestamp || 0) - (a.messages[0]?.timestamp || 0));
+      setMatches(valid);
+    }, () => setMatches([]));
+    return () => unsub();
+  }, [user, lang]);
 
   const handleProfileSetupComplete = async () => {
     if (user) {
@@ -165,48 +230,127 @@ const App: React.FC = () => {
         const userData = userDoc.data() as UserProfile;
         setCurrentUser({ ...userData, interests: userData.interests || [], images: userData.images || [] });
         setNeedsSetup(false);
-        loadLikesCount(user.uid);
+        likesUnsubRef.current?.();
+        likesUnsubRef.current = loadLikesCount(user.uid);
         updateUserLocation(user.uid);
       }
     }
   };
 
-  const handleLike = (profile: UserProfile) => {
-    if (user) {
-      addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp() }).catch(() => {});
+  const refillProfiles = (prev: UserProfile[], removedId: string): UserProfile[] => {
+    const updated = prev.filter(p => p.id !== removedId);
+    if (updated.length > 0) return updated;
+    // Remettre les profils démo quand tout est épuisé
+    const gender = currentUser?.gender;
+    const lookingFor = gender === 'homme' ? 'femme' : gender === 'femme' ? 'homme' : null;
+    let demos = lookingFor ? DEMO_PROFILES.filter(d => d.gender === lookingFor) : DEMO_PROFILES;
+    if (countryFilter) {
+      const needle = countryFilter.trim().toLowerCase();
+      demos = demos.filter(d => (d.country || d.location || '').toLowerCase().includes(needle));
     }
-    const compatibility = currentUser ? calculateCompatibility(currentUser, profile) : 50;
+    return demos;
+  };
+
+  const canSuperLike = (): boolean => {
+    if (!currentUser) return false;
+    if (currentUser.isPremium) return true;
+    const last = currentUser.lastSuperLikeAt;
+    return !last || Date.now() - last > 24 * 60 * 60 * 1000;
+  };
+
+  const handleSuperLike = (profile: UserProfile) => {
+    if (!user || !currentUser) return;
+    const now = Date.now();
+    setCurrentUser(prev => prev ? { ...prev, lastSuperLikeAt: now } : prev);
+    updateDoc(doc(db, 'users', user.uid), { lastSuperLikeAt: now }).catch(() => {});
+
     const alreadyMatched = matches.some(m => m.partner.id === profile.id);
-    if (!alreadyMatched && isMatch(compatibility)) {
-      const newSession: ChatSession = { id: `session-${Date.now()}`, partner: profile, messages: [{ id: 'm1', senderId: profile.id, text: lang === 'fr' ? `C'est un match ! Amahoro ${currentUser?.name} ! 🇧🇮` : `It's a match! Amahoro ${currentUser?.name}! 🇧🇮`, timestamp: Date.now() }] };
-      setMatches(prev => [newSession, ...prev]);
-    }
-    setProfiles(prev => {
-      const updated = prev.filter(p => p.id !== profile.id);
-      if (updated.length === 0) {
-        // Remettre les profils démo quand tout est épuisé
-        const gender = currentUser?.gender;
-        const lookingFor = gender === 'homme' ? 'femme' : gender === 'femme' ? 'homme' : null;
-        let demos = lookingFor ? DEMO_PROFILES.filter(d => d.gender === lookingFor) : DEMO_PROFILES;
-        if (countryFilter) {
-          const needle = countryFilter.trim().toLowerCase();
-          demos = demos.filter(d => (d.country || d.location || '').toLowerCase().includes(needle));
-        }
-        return demos;
+    if (!alreadyMatched) {
+      if (profile.isDemo) {
+        // Super like = match garanti avec les profils démo.
+        createMatch(user.uid, profile).catch(() => {});
+      } else {
+        addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp(), type: 'super' }).catch(() => {});
+        (async () => {
+          try {
+            const q = query(collection(db, 'likes'), where('fromUserId', '==', profile.id), where('toUserId', '==', user.uid));
+            const snap = await getDocs(q);
+            if (!snap.empty) await createMatch(user.uid, profile);
+          } catch {}
+        })();
       }
-      return updated;
-    });
+    }
+    setProfiles(prev => refillProfiles(prev, profile.id));
+  };
+
+  const handleBoost = (): boolean => {
+    if (!user || !currentUser) return false;
+    if (currentUser.boostedUntil && currentUser.boostedUntil > Date.now()) return false;
+    const last = currentUser.lastBoostAt;
+    const allowed = currentUser.isPremium || !last || Date.now() - last > 24 * 60 * 60 * 1000;
+    if (!allowed) return false;
+    const now = Date.now();
+    const boostedUntil = now + 30 * 60 * 1000;
+    setCurrentUser(prev => prev ? { ...prev, lastBoostAt: now, boostedUntil } : prev);
+    updateDoc(doc(db, 'users', user.uid), { lastBoostAt: now, boostedUntil }).catch(() => {});
+    return true;
+  };
+
+  const handleLike = async (profile: UserProfile) => {
+    if (user) {
+      const alreadyMatched = matches.some(m => m.partner.id === profile.id);
+      if (!alreadyMatched) {
+        if (profile.isDemo) {
+          // Pas de vraie personne en face : on simule une chance de match.
+          const compatibility = currentUser ? calculateCompatibility(currentUser, profile) : 50;
+          if (isMatch(compatibility)) await createMatch(user.uid, profile).catch(() => {});
+        } else {
+          addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp() }).catch(() => {});
+          try {
+            // Match réel seulement si cette personne t'a déjà liké en retour.
+            const q = query(collection(db, 'likes'), where('fromUserId', '==', profile.id), where('toUserId', '==', user.uid));
+            const snap = await getDocs(q);
+            if (!snap.empty) await createMatch(user.uid, profile);
+          } catch {}
+        }
+      }
+    }
+    setProfiles(prev => refillProfiles(prev, profile.id));
   };
 
   const handleDislike = (profileId: string) => setProfiles(prev => prev.filter(p => p.id !== profileId));
   const handleUndo = () => { if (user) updateUserLocation(user.uid); };
+
+  const handleBlock = async (profile: UserProfile) => {
+    setProfiles(prev => prev.filter(p => p.id !== profile.id));
+    setAllRealUsers(prev => prev.filter(p => p.id !== profile.id));
+    if (currentScreen === AppScreen.CHAT) { setActiveChat(null); setCurrentScreen(AppScreen.MESSAGES); }
+    if (!user || profile.isDemo) return;
+    try {
+      await setDoc(doc(db, 'blocks', `${user.uid}_${profile.id}`), { blockerId: user.uid, blockedId: profile.id, timestamp: serverTimestamp() });
+      await deleteDoc(doc(db, 'matches', matchDocId(user.uid, profile.id)));
+    } catch {}
+  };
+
+  const handleReport = async (profile: UserProfile, reason: string) => {
+    if (!user || profile.isDemo) return;
+    try {
+      await addDoc(collection(db, 'reports'), { reporterId: user.uid, reportedId: profile.id, reason, timestamp: serverTimestamp() });
+    } catch {}
+  };
   const openChat = (session: ChatSession) => { setActiveChat(session); setCurrentScreen(AppScreen.CHAT); };
-  const handleMatch = (session: ChatSession) => { setMatches(prev => [session, ...prev]); setCurrentScreen(AppScreen.MESSAGES); setLikesCount(prev => Math.max(0, prev - 1)); };
+  const handleMatch = async (partner: UserProfile) => {
+    if (user) await createMatch(user.uid, partner).catch(() => {});
+    setCurrentScreen(AppScreen.MESSAGES);
+    setLikesCount(prev => Math.max(0, prev - 1));
+  };
 
   const handleSignOut = async () => {
     if (user) {
       await updateDoc(doc(db, 'users', user.uid), { isOnline: false, lastSeen: Date.now() });
     }
+    likesUnsubRef.current?.();
+    likesUnsubRef.current = null;
     await signOut(auth);
     setUser(null); setCurrentUser(null); setProfiles([]); setMatches([]);
     setShowFeedback(false);
@@ -258,12 +402,18 @@ const App: React.FC = () => {
             countryFilter={countryFilter}
             onCountrySearch={handleCountrySearch}
             onClearCountryFilter={clearCountryFilter}
+            onReport={handleReport}
+            onBlock={handleBlock}
+            canSuperLike={canSuperLike}
+            onSuperLike={handleSuperLike}
+            boostActive={!!(currentUser?.boostedUntil && currentUser.boostedUntil > Date.now())}
+            onBoost={handleBoost}
           />
         )}
         {currentScreen === AppScreen.LIKES && user && currentUser && <LikesScreen currentUserId={user.uid} currentUserName={currentUser.name} onMatch={handleMatch} />}
         {currentScreen === AppScreen.MESSAGES && <MessagesScreen matches={matches} onSelectChat={openChat} />}
         {currentScreen === AppScreen.PROFILE && currentUser && <ProfileScreen user={currentUser} setUser={setCurrentUser} onSignOut={() => setShowFeedback(true)} />}
-        {currentScreen === AppScreen.CHAT && activeChat && user && <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} lang={lang} />}
+        {currentScreen === AppScreen.CHAT && activeChat && user && <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} lang={lang} onReport={handleReport} onBlock={handleBlock} />}
       </main>
 
       {currentScreen !== AppScreen.CHAT && <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} matches={matches} likesCount={likesCount} />}
