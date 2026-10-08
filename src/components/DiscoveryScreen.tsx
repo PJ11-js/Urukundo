@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile } from '../types';
+import { cloudinaryUrl } from '../services/cloudinaryService';
 
 interface Props {
   profiles: UserProfile[];
@@ -360,7 +361,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
           >
             {nextProfile.images?.[0] && (
               <img
-                src={nextProfile.images[0]}
+                src={cloudinaryUrl(nextProfile.images[0], 750, 1000)}
                 loading="lazy"
                 className="w-full h-full object-cover opacity-60"
                 alt=""
@@ -396,7 +397,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
           >
             {photos[activePhoto] ? (
               <img
-                src={photos[activePhoto]}
+                src={cloudinaryUrl(photos[activePhoto], 750, 1000)}
                 alt={currentProfile.name}
                 className="w-full h-full object-cover pointer-events-none"
                 draggable={false}

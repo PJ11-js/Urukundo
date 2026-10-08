@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { UserProfile } from '../types';
+import { cloudinaryUrl } from '../services/cloudinaryService';
 
 interface Props {
   currentUserId: string;
@@ -82,7 +83,7 @@ const LikesScreen: React.FC<Props> = ({ currentUserId, currentUserName, onMatch 
           {likers.map(profile => (
             <div key={profile.id} className="relative rounded-2xl overflow-hidden shadow-sm bg-white border border-gray-100">
               {profile.images?.[0] ? (
-                <img src={profile.images[0]} className="w-full h-48 object-cover" alt={profile.name} />
+                <img src={cloudinaryUrl(profile.images[0], 420, 400)} className="w-full h-48 object-cover" alt={profile.name} />
               ) : (
                 <div className="w-full h-48 bg-gradient-to-br from-red-100 to-green-100 flex items-center justify-center">
                   <span className="text-5xl font-bold text-white">{profile.name[0]}</span>

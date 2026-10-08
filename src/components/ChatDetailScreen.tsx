@@ -5,6 +5,7 @@ import { ChatSession, UserProfile } from '../types';
 import { getConversationStarter } from '../services/geminiService';
 import { notifyUser } from '../services/pushService';
 import { calculateDistance } from '../services/locationService';
+import { cloudinaryUrl } from '../services/cloudinaryService';
 import LiveLocationMap from './LiveLocationMap';
 
 interface Props {
@@ -150,7 +151,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
           <i className="fa-solid fa-chevron-left text-xl"></i>
         </button>
         {session.partner.images?.[0] ? (
-          <img src={session.partner.images[0]} className="w-10 h-10 rounded-full object-cover" alt={session.partner.name} />
+          <img src={cloudinaryUrl(session.partner.images[0], 80, 80)} className="w-10 h-10 rounded-full object-cover" alt={session.partner.name} />
         ) : (
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-200 to-green-200 flex items-center justify-center">
             <span className="text-white font-bold">{session.partner.name[0]}</span>

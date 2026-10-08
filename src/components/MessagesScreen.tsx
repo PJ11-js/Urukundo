@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChatSession } from '../types';
+import { cloudinaryUrl } from '../services/cloudinaryService';
 
 interface Props {
   matches: ChatSession[];
@@ -20,7 +21,7 @@ const MessagesScreen: React.FC<Props> = ({ matches, onSelectChat }) => {
             >
               <div className="w-16 h-16 rounded-full p-0.5 border-2 border-red-500">
                 <img
-                  src={match.partner.images[0]}
+                  src={cloudinaryUrl(match.partner.images[0], 128, 128)}
                   className="w-full h-full rounded-full object-cover"
                   alt={match.partner.name}
                 />
@@ -48,7 +49,7 @@ const MessagesScreen: React.FC<Props> = ({ matches, onSelectChat }) => {
                 className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white hover:shadow-sm transition-all cursor-pointer"
               >
                 <img
-                  src={session.partner.images[0]}
+                  src={cloudinaryUrl(session.partner.images[0], 112, 112)}
                   className="w-14 h-14 rounded-full object-cover"
                   alt={session.partner.name}
                 />

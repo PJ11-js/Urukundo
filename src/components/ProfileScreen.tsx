@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { uploadImage } from '../services/cloudinaryService';
+import { uploadImage, cloudinaryUrl } from '../services/cloudinaryService';
 import { UserProfile } from '../types';
 import DiscoverySettingsScreen from './DiscoverySettingsScreen';
 import SafetyScreen from './SafetyScreen';
@@ -96,7 +96,7 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
     <div className="h-full flex flex-col bg-white">
       <div className="relative h-72 w-full">
         {user.images[activePhoto] ? (
-          <img src={user.images[activePhoto]} className="w-full h-full object-cover" alt="Profil" />
+          <img src={cloudinaryUrl(user.images[activePhoto], 900, 650)} className="w-full h-full object-cover" alt="Profil" />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-red-100 to-green-100 flex items-center justify-center">
             <i className="fa-solid fa-user text-gray-300 text-6xl"></i>
