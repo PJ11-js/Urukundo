@@ -35,6 +35,8 @@ export interface Message {
   senderId: string;
   text: string;
   timestamp: number;
+  deletedFor?: string[];
+  deletedForEveryone?: boolean;
 }
 
 export interface ChatSession {

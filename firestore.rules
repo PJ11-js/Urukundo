@@ -30,6 +30,27 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid in chatId.split('_');
       allow create: if request.auth != null && request.auth.uid in chatId.split('_') &&
         request.auth.uid == request.resource.data.senderId;
+      // Suppression façon WhatsApp : "pour moi" (n'importe quel participant
+      // ajoute juste son propre uid à deletedFor) ou "pour tout le monde"
+      // (seul l'auteur du message peut le faire). Le contenu du message
+      // (texte/audio/expéditeur/date) ne peut jamais être modifié.
+      allow update: if request.auth != null && request.auth.uid in chatId.split('_') &&
+        request.resource.data.senderId == resource.data.senderId &&
+        request.resource.data.timestamp == resource.data.timestamp &&
+        request.resource.data.get('text', null) == resource.data.get('text', null) &&
+        request.resource.data.get('audioUrl', null) == resource.data.get('audioUrl', null) &&
+        (
+          (
+            request.resource.data.deletedFor is list &&
+            request.resource.data.deletedFor.hasOnly(resource.data.get('deletedFor', []).concat([request.auth.uid])) &&
+            request.resource.data.get('deletedForEveryone', false) == resource.data.get('deletedForEveryone', false)
+          ) ||
+          (
+            request.auth.uid == resource.data.senderId &&
+            request.resource.data.deletedForEveryone == true &&
+            request.resource.data.get('deletedFor', []) == resource.data.get('deletedFor', [])
+          )
+        );
     }
     // Conversation privée avec l'assistant IA : uniquement son propriétaire.
     match /aiAssistant/{userId}/messages/{messageId} {

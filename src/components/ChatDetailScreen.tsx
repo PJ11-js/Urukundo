@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, setDoc, updateDoc, deleteField } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, setDoc, updateDoc, deleteField, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ChatSession, UserProfile } from '../types';
 import { getConversationStarter } from '../services/geminiService';
@@ -30,7 +30,9 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   const [showReportReasons, setShowReportReasons] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const [matchData, setMatchData] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; isMe: boolean } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pressTimerRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const watchIdRef = useRef<number | null>(null);
   const lastSentAtRef = useRef(0);
@@ -48,13 +50,17 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       waitingPartner: (name: string) => `En attente que ${name} active aussi le partage 📍`,
       locationDenied: 'Position refusée. Active la localisation pour partager.',
       micDenied: "Micro refusé. Autorise l'accès au micro pour envoyer un message vocal.",
-      audioError: "Erreur lors de l'envoi du message vocal.", voiceMessage: '🎤 Message vocal' },
+      audioError: "Erreur lors de l'envoi du message vocal.", voiceMessage: '🎤 Message vocal',
+      deleteForMe: 'Supprimer pour moi', deleteForEveryone: 'Supprimer pour tout le monde',
+      deletedPlaceholder: 'Message supprimé' },
     en: { matched: 'You matched 🎉 Amahoro!', placeholder: 'Type a message...', wingman: 'AI WINGMAN: SUGGEST A REPLY', thinking: 'Thinking...', whatsappPrompt: 'Enter your WhatsApp number:', call: 'Call', report: 'Report', block: 'Block', cancel: 'Cancel', reportTitle: 'Why are you reporting this profile?', blockTitle: 'Block this profile?', blockBody: "This person won't be able to see your profile, or you theirs.", blockConfirm: 'Block',
       shareLocation: 'Share my live location', stopSharing: 'Stop sharing location',
       waitingPartner: (name: string) => `Waiting for ${name} to also enable sharing 📍`,
       locationDenied: 'Location denied. Enable it to share.',
       micDenied: 'Microphone denied. Allow microphone access to send a voice message.',
-      audioError: 'Error sending voice message.', voiceMessage: '🎤 Voice message' }
+      audioError: 'Error sending voice message.', voiceMessage: '🎤 Voice message',
+      deleteForMe: 'Delete for me', deleteForEveryone: 'Delete for everyone',
+      deletedPlaceholder: 'This message was deleted' }
   };
   const t = T[lang];
   const reportReasons = lang === 'fr' ? REPORT_REASONS_FR : REPORT_REASONS_EN;
@@ -195,6 +201,31 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
     setIsSendingAudio(false);
   };
 
+  const startPress = (msg: any) => {
+    if (msg.deletedForEveryone) return;
+    pressTimerRef.current = window.setTimeout(() => {
+      setDeleteTarget({ id: msg.id, isMe: msg.senderId === currentUserId });
+    }, 450);
+  };
+
+  const cancelPress = () => {
+    if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
+  };
+
+  const handleDeleteForMe = async (messageId: string) => {
+    try {
+      await updateDoc(doc(db, 'chats', chatId, 'messages', messageId), { deletedFor: arrayUnion(currentUserId) });
+    } catch (err) { console.error(err); }
+    setDeleteTarget(null);
+  };
+
+  const handleDeleteForEveryone = async (messageId: string) => {
+    try {
+      await updateDoc(doc(db, 'chats', chatId, 'messages', messageId), { deletedForEveryone: true });
+    } catch (err) { console.error(err); }
+    setDeleteTarget(null);
+  };
+
   const handleAiWingman = async () => {
     setIsAiLoading(true);
     const suggestion = await getConversationStarter(session.partner.name, session.partner.interests, currentUserId, messages, lang);
@@ -296,6 +327,24 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
         </div>
       )}
 
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setDeleteTarget(null)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-2" onClick={e => e.stopPropagation()}>
+            <button onClick={() => handleDeleteForMe(deleteTarget.id)}
+              className="w-full py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-xl text-left text-sm text-gray-700">
+              {t.deleteForMe}
+            </button>
+            {deleteTarget.isMe && (
+              <button onClick={() => handleDeleteForEveryone(deleteTarget.id)}
+                className="w-full py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-xl text-left text-sm text-red-600">
+                {t.deleteForEveryone}
+              </button>
+            )}
+            <button onClick={() => setDeleteTarget(null)} className="w-full py-2 text-sm text-gray-400">{t.cancel}</button>
+          </div>
+        </div>
+      )}
+
       {showWhatsApp && (
         <div className="bg-green-50 p-4 border-b border-green-100 flex-shrink-0">
           <p className="text-xs text-green-700 font-medium mb-2">{t.whatsappPrompt}</p>
@@ -329,11 +378,23 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
             distanceKm={calculateDistance(myCoords.lat, myCoords.lng, partnerCoords.lat, partnerCoords.lng)}
           />
         )}
-        {messages.map(msg => {
+        {messages.filter(msg => !msg.deletedFor?.includes(currentUserId)).map(msg => {
           const isMe = msg.senderId === currentUserId;
+          if (msg.deletedForEveryone) {
+            return (
+              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                <div className="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm italic text-gray-400 bg-gray-100">
+                  {t.deletedPlaceholder}
+                </div>
+              </div>
+            );
+          }
           return (
             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[75%] ${msg.type === 'audio' ? 'p-2' : 'px-4 py-2.5'} rounded-2xl text-sm ${isMe ? 'bg-red-500 text-white rounded-br-none' : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-bl-none'}`}>
+              <div
+                onMouseDown={() => startPress(msg)} onMouseUp={cancelPress} onMouseLeave={cancelPress}
+                onTouchStart={() => startPress(msg)} onTouchEnd={cancelPress} onTouchCancel={cancelPress}
+                className={`max-w-[75%] ${msg.type === 'audio' ? 'p-2' : 'px-4 py-2.5'} rounded-2xl text-sm select-none ${isMe ? 'bg-red-500 text-white rounded-br-none' : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-bl-none'}`}>
                 {msg.type === 'audio' ? (
                   <audio controls src={msg.audioUrl} style={{ width: 220, height: 32 }} />
                 ) : msg.text}
