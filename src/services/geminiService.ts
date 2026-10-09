@@ -2,6 +2,22 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string || '';
 
+// Gemini renvoie parfois une 503 "high demand" transitoire (observé en test) —
+// on retente une ou deux fois avant d'abandonner, plutôt que de faire échouer
+// la conversation sur un simple pic de charge côté Google.
+const withRetry = async <T>(fn: () => Promise<T>, retries = 2): Promise<T> => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      const status = error?.status || error?.httpStatus;
+      const isTransient = status === 503 || status === 429 || /overloaded|high demand/i.test(error?.message || '');
+      if (!isTransient || attempt >= retries) throw error;
+      await new Promise(r => setTimeout(r, 1200 * (attempt + 1)));
+    }
+  }
+};
+
 export const generateBio = async (interests: string[], name: string): Promise<string> => {
   try {
     if (!apiKey) return "Looking for a meaningful connection. Amahoro! 🇧🇮";
@@ -71,7 +87,7 @@ export const getConversationStarter = async (
       ? `Tu es un assistant qui aide quelqu'un à répondre sur une app de rencontre burundaise. Voici les derniers messages de la conversation avec ${partnerName} :\n${recentHistory}\n\nPropose une réponse courte, naturelle et bienveillante au dernier message de ${partnerName} ("${lastFromPartner.text}"). ${langInstruction} Ne mets pas de guillemets, donne juste le message à envoyer.`
       : `Génère un message d'ouverture créatif et respectueux pour une app de rencontre. La personne s'appelle ${partnerName} et aime ${partnerInterests.join(', ') || 'rencontrer de nouvelles personnes'}. Le contexte est le Burundi (Bujumbura/Gitega). ${langInstruction} Reste court et chaleureux. Ne mets pas de guillemets, donne juste le message à envoyer.`;
 
-    const result = await model.generateContent(prompt);
+    const result = await withRetry(() => model.generateContent(prompt));
     return result.response.text()?.trim() || fallback;
   } catch (error) {
     console.error('Error generating starter:', error);
@@ -111,7 +127,7 @@ export const chatWithAssistant = async (
         ...history.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
       ],
     });
-    const result = await chat.sendMessage(userMessage);
+    const result = await withRetry(() => chat.sendMessage(userMessage));
     return result.response.text()?.trim() || fallback;
   } catch (error) {
     console.error('Error in assistant chat:', error);

@@ -136,6 +136,12 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   };
 
   const startRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      alert(lang === 'fr'
+        ? "Ce navigateur ne supporte pas l'enregistrement audio. Essaie d'ouvrir Urukundo dans Chrome."
+        : "This browser doesn't support audio recording. Try opening Urukundo in Chrome.");
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
@@ -148,8 +154,14 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       setIsRecording(true);
       setRecordSeconds(0);
       recordTimerRef.current = window.setInterval(() => setRecordSeconds(s => s + 1), 1000);
-    } catch {
-      alert(t.micDenied);
+    } catch (err: any) {
+      console.error('Mic error:', err?.name, err?.message);
+      if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') alert(t.micDenied);
+      else if (err?.name === 'NotFoundError') {
+        alert(lang === 'fr' ? 'Aucun micro détecté sur cet appareil.' : 'No microphone detected on this device.');
+      } else {
+        alert(`${t.micDenied}\n\n(${err?.name || 'Erreur'}: ${err?.message || 'inconnue'})`);
+      }
     }
   };
 
