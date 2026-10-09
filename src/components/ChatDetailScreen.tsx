@@ -16,12 +16,13 @@ interface Props {
   onReport?: (profile: UserProfile, reason: string) => void;
   onBlock?: (profile: UserProfile) => void;
   onUnmatch?: (profile: UserProfile) => void;
+  onStartCall?: (partner: UserProfile, type: 'audio' | 'video') => void;
 }
 
 const REPORT_REASONS_FR = ['Faux profil', 'Contenu inapproprié', 'Harcèlement', 'Autre'];
 const REPORT_REASONS_EN = ['Fake profile', 'Inappropriate content', 'Harassment', 'Other'];
 
-const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lang = 'fr', onReport, onBlock, onUnmatch }) => {
+const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lang = 'fr', onReport, onBlock, onUnmatch, onStartCall }) => {
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -44,6 +45,8 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<number | null>(null);
+  const typingTimerRef = useRef<number | null>(null);
+  const isTypingRef = useRef(false);
   const chatId = [currentUserId, session.partner.id].sort().join('_');
 
   const T = {
@@ -53,6 +56,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       locationDenied: 'Position refusée. Active la localisation pour partager.',
       micDenied: "Micro refusé. Autorise l'accès au micro pour envoyer un message vocal.",
       audioError: "Erreur lors de l'envoi du message vocal.", voiceMessage: '🎤 Message vocal',
+      typing: 'est en train d\'écrire...', seen: 'Vu', sent: 'Envoyé',
       deleteForMe: 'Supprimer pour moi', deleteForEveryone: 'Supprimer pour tout le monde',
       deletedPlaceholder: 'Message supprimé',
       unmatch: 'Ne plus matcher', unmatchTitle: 'Ne plus matcher avec cette personne ?',
@@ -64,6 +68,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       locationDenied: 'Location denied. Enable it to share.',
       micDenied: 'Microphone denied. Allow microphone access to send a voice message.',
       audioError: 'Error sending voice message.', voiceMessage: '🎤 Voice message',
+      typing: 'is typing...', seen: 'Seen', sent: 'Sent',
       deleteForMe: 'Delete for me', deleteForEveryone: 'Delete for everyone',
       deletedPlaceholder: 'This message was deleted',
       unmatch: 'Unmatch', unmatchTitle: 'Unmatch with this person?',
@@ -73,6 +78,9 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   const t = T[lang];
   const reportReasons = lang === 'fr' ? REPORT_REASONS_FR : REPORT_REASONS_EN;
 
+  const partnerTyping = !!matchData?.typing?.[session.partner.id];
+  const partnerLastRead = matchData?.lastRead?.[session.partner.id] as number | undefined;
+  const visibleMessages = messages.filter(msg => !msg.deletedFor?.includes(currentUserId));
   const myLiveLocationOn = !!matchData?.liveLocation?.[currentUserId];
   const partnerLiveLocationOn = !!matchData?.liveLocation?.[session.partner.id];
   const myCoords = matchData?.liveCoords?.[currentUserId];
@@ -91,6 +99,20 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
     const unsub = onSnapshot(doc(db, 'matches', chatId), (snap) => setMatchData(snap.data() || null), () => {});
     return () => unsub();
   }, [chatId]);
+
+  // Marque la conversation comme lue dès qu'on l'a ouverte et chaque fois que
+  // de nouveaux messages arrivent pendant qu'elle reste ouverte.
+  useEffect(() => {
+    if (!messages.length) return;
+    updateDoc(doc(db, 'matches', chatId), { [`lastRead.${currentUserId}`]: Date.now() }).catch(() => {});
+  }, [messages.length, chatId, currentUserId]);
+
+  // Efface l'indicateur "en train d'écrire" si on quitte la conversation
+  // sans avoir laissé le minuteur d'inactivité le faire.
+  useEffect(() => () => {
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    if (isTypingRef.current) updateDoc(doc(db, 'matches', chatId), { [`typing.${currentUserId}`]: false }).catch(() => {});
+  }, [chatId, currentUserId]);
 
   // Suivi GPS tant que CE chat est ouvert et que le partage est activé — pas de
   // suivi en arrière-plan (limite des navigateurs, pas un choix de design).
@@ -136,10 +158,26 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
     setShowMenu(false);
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputText(e.target.value);
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      updateDoc(doc(db, 'matches', chatId), { [`typing.${currentUserId}`]: true }).catch(() => {});
+    }
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = window.setTimeout(() => {
+      isTypingRef.current = false;
+      updateDoc(doc(db, 'matches', chatId), { [`typing.${currentUserId}`]: false }).catch(() => {});
+    }, 2500);
+  };
+
   const handleSend = async () => {
     if (!inputText.trim()) return;
     const text = inputText;
     setInputText('');
+    if (typingTimerRef.current) { clearTimeout(typingTimerRef.current); typingTimerRef.current = null; }
+    isTypingRef.current = false;
+    updateDoc(doc(db, 'matches', chatId), { [`typing.${currentUserId}`]: false }).catch(() => {});
     try {
       await addDoc(collection(db, 'chats', chatId, 'messages'), {
         senderId: currentUserId, text, timestamp: serverTimestamp(),
@@ -268,6 +306,18 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
           <h4 className="font-bold text-gray-800 leading-none">{session.partner.name}</h4>
           <span className="text-[10px] text-green-500 font-medium">● {lang === 'fr' ? 'En ligne' : 'Online'}</span>
         </div>
+        {onStartCall && (
+          <>
+            <button onClick={() => onStartCall(session.partner, 'audio')}
+              className="w-9 h-9 rounded-full bg-gray-50 text-gray-500 flex items-center justify-center hover:bg-gray-100">
+              <i className="fa-solid fa-phone text-sm"></i>
+            </button>
+            <button onClick={() => onStartCall(session.partner, 'video')}
+              className="w-9 h-9 rounded-full bg-gray-50 text-gray-500 flex items-center justify-center hover:bg-gray-100">
+              <i className="fa-solid fa-video text-sm"></i>
+            </button>
+          </>
+        )}
         <button onClick={handleWhatsApp}
           className="w-9 h-9 rounded-full bg-green-500 text-white flex items-center justify-center shadow-md">
           <i className="fa-brands fa-whatsapp text-lg"></i>
@@ -405,8 +455,9 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
             distanceKm={calculateDistance(myCoords.lat, myCoords.lng, partnerCoords.lat, partnerCoords.lng)}
           />
         )}
-        {messages.filter(msg => !msg.deletedFor?.includes(currentUserId)).map(msg => {
+        {visibleMessages.map((msg, i) => {
           const isMe = msg.senderId === currentUserId;
+          const isLast = i === visibleMessages.length - 1;
           if (msg.deletedForEveryone) {
             return (
               <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -438,16 +489,28 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
             );
           }
           return (
-            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+            <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
               <div
                 onMouseDown={() => startPress(msg)} onMouseUp={cancelPress} onMouseLeave={cancelPress}
                 onTouchStart={() => startPress(msg)} onTouchEnd={cancelPress} onTouchCancel={cancelPress}
                 className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm select-none ${isMe ? 'bg-red-500 text-white rounded-br-none' : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-bl-none'}`}>
                 {msg.text}
               </div>
+              {isMe && isLast && (
+                <span className="text-[10px] text-gray-400 mt-0.5 px-1">
+                  {partnerLastRead !== undefined && partnerLastRead >= msg.timestamp ? t.seen : t.sent}
+                </span>
+              )}
             </div>
           );
         })}
+        {partnerTyping && (
+          <div className="flex justify-start">
+            <div className="px-4 py-2.5 rounded-2xl bg-white shadow-sm border border-gray-100 rounded-bl-none text-xs text-gray-400 italic">
+              {session.partner.name} {t.typing}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white border-t border-gray-100 flex-shrink-0 p-4">
@@ -474,7 +537,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <input ref={inputRef} type="text" value={inputText} onChange={(e) => setInputText(e.target.value)}
+              <input ref={inputRef} type="text" value={inputText} onChange={handleInputChange}
                 placeholder={t.placeholder} onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                 className="flex-1 bg-gray-100 rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-100"
                 style={{ fontSize: '16px' }} />

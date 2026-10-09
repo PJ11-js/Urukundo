@@ -55,6 +55,29 @@ service cloud.firestore {
           )
         );
     }
+    // Appels audio/vidéo en direct (signalisation WebRTC). Seuls l'appelant
+    // et l'appelé accèdent à l'appel et à ses bougies ICE.
+    match /calls/{callId} {
+      allow read, update: if request.auth != null &&
+        (request.auth.uid == resource.data.callerId || request.auth.uid == resource.data.calleeId);
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.callerId;
+
+      match /callerCandidates/{candidateId} {
+        allow read: if request.auth != null &&
+          request.auth.uid in [get(/databases/$(database)/documents/calls/$(callId)).data.callerId,
+                                get(/databases/$(database)/documents/calls/$(callId)).data.calleeId];
+        allow create: if request.auth != null &&
+          request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.callerId;
+      }
+      match /calleeCandidates/{candidateId} {
+        allow read: if request.auth != null &&
+          request.auth.uid in [get(/databases/$(database)/documents/calls/$(callId)).data.callerId,
+                                get(/databases/$(database)/documents/calls/$(callId)).data.calleeId];
+        allow create: if request.auth != null &&
+          request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.calleeId;
+      }
+    }
+
     // Conversation privée avec l'assistant IA : uniquement son propriétaire.
     match /aiAssistant/{userId}/messages/{messageId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;

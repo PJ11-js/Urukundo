@@ -18,6 +18,9 @@ import InstallBanner from './components/InstallBanner';
 import GenderUpdateScreen from './components/GenderUpdateScreen';
 import BottomNav from './components/BottomNav';
 import ThemeToggle, { Theme } from './components/ThemeToggle';
+import CallScreen from './components/CallScreen';
+import { createCallDoc, declineCall } from './services/callService';
+import { cloudinaryUrl } from './services/cloudinaryService';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -38,6 +41,8 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<Theme>((localStorage.getItem('urukundo_theme') as Theme) || 'light');
   const likesUnsubRef = useRef<(() => void) | null>(null);
   const [lastSwipe, setLastSwipe] = useState<{ profile: UserProfile; likeDocId?: string; prevSuperLikeAt?: number } | null>(null);
+  const [incomingCall, setIncomingCall] = useState<{ id: string; callerId: string; type: 'audio' | 'video'; offer?: any; callerProfile: UserProfile } | null>(null);
+  const [activeCall, setActiveCall] = useState<{ callId: string; partner: UserProfile; type: 'audio' | 'video'; role: 'caller' | 'callee'; offer?: any } | null>(null);
 
   const handleLangSelect = (l: 'fr' | 'en') => {
     setLang(l);
@@ -210,6 +215,44 @@ const App: React.FC = () => {
     }, () => setMatches([]));
     return () => unsub();
   }, [user, lang]);
+
+  // Écoute globale des appels entrants : marche depuis n'importe quel écran,
+  // pas seulement quand la conversation est ouverte.
+  useEffect(() => {
+    if (!user) { setIncomingCall(null); return; }
+    const q = query(collection(db, 'calls'), where('calleeId', '==', user.uid), where('status', '==', 'ringing'));
+    const unsub = onSnapshot(q, async (snapshot) => {
+      const d = snapshot.docs[0];
+      if (!d) { setIncomingCall(null); return; }
+      const data = d.data() as any;
+      try {
+        const callerSnap = await getDoc(doc(db, 'users', data.callerId));
+        if (!callerSnap.exists()) return;
+        setIncomingCall({ id: d.id, callerId: data.callerId, type: data.type, offer: data.offer, callerProfile: callerSnap.data() as UserProfile });
+      } catch {}
+    }, () => setIncomingCall(null));
+    return () => unsub();
+  }, [user]);
+
+  const handleStartCall = async (partner: UserProfile, type: 'audio' | 'video') => {
+    if (!user) return;
+    const callId = await createCallDoc(user.uid, partner.id, type);
+    notifyUser(partner.id, type === 'video' ? '📹 Appel vidéo entrant' : '📞 Appel entrant',
+      lang === 'fr' ? `${currentUser?.name || 'Quelqu\'un'} t'appelle sur Urukundo` : `${currentUser?.name || 'Someone'} is calling you on Urukundo`);
+    setActiveCall({ callId, partner, type, role: 'caller' });
+  };
+
+  const handleAcceptCall = () => {
+    if (!incomingCall) return;
+    setActiveCall({ callId: incomingCall.id, partner: incomingCall.callerProfile, type: incomingCall.type, role: 'callee', offer: incomingCall.offer });
+    setIncomingCall(null);
+  };
+
+  const handleDeclineCall = () => {
+    if (!incomingCall) return;
+    declineCall(incomingCall.id);
+    setIncomingCall(null);
+  };
 
   const handleProfileSetupComplete = async () => {
     if (user) {
@@ -390,6 +433,45 @@ const App: React.FC = () => {
         <FeedbackScreen userId={user.uid} lang={lang} onConfirm={handleSignOut} onCancel={() => setShowFeedback(false)} />
       )}
 
+      {incomingCall && !activeCall && (
+        <div className="absolute inset-0 z-50 bg-gray-900/95 flex flex-col items-center justify-center gap-4 text-white">
+          {incomingCall.callerProfile.images?.[0] ? (
+            <img src={cloudinaryUrl(incomingCall.callerProfile.images[0], 300, 300)} className="w-32 h-32 rounded-full object-cover shadow-xl" alt={incomingCall.callerProfile.name} />
+          ) : (
+            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-red-400 to-green-400 flex items-center justify-center text-4xl font-bold">
+              {incomingCall.callerProfile.name[0]}
+            </div>
+          )}
+          <h2 className="text-2xl font-bold">{incomingCall.callerProfile.name}</h2>
+          <p className="text-gray-300 text-sm">
+            {incomingCall.type === 'video'
+              ? (lang === 'fr' ? 'Appel vidéo entrant...' : 'Incoming video call...')
+              : (lang === 'fr' ? 'Appel entrant...' : 'Incoming call...')}
+          </p>
+          <div className="flex items-center gap-10 mt-6">
+            <button onClick={handleDeclineCall} className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center text-2xl shadow-lg active:scale-90 transition-transform">
+              <i className="fa-solid fa-phone-slash"></i>
+            </button>
+            <button onClick={handleAcceptCall} className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center text-2xl shadow-lg active:scale-90 transition-transform">
+              <i className="fa-solid fa-phone"></i>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeCall && user && (
+        <CallScreen
+          callId={activeCall.callId}
+          currentUserId={user.uid}
+          partner={activeCall.partner}
+          type={activeCall.type}
+          role={activeCall.role}
+          offer={activeCall.offer}
+          lang={lang}
+          onEnd={() => setActiveCall(null)}
+        />
+      )}
+
       <InstallBanner lang={lang} />
       <header className="px-6 py-4 flex justify-between items-center bg-white border-b border-gray-100 z-10 flex-shrink-0">
         <h1 className="text-2xl font-black tracking-tighter" style={{ color: '#ce1126' }}>
@@ -426,7 +508,7 @@ const App: React.FC = () => {
         {currentScreen === AppScreen.LIKES && user && currentUser && <LikesScreen currentUserId={user.uid} currentUserName={currentUser.name} onMatch={handleMatch} />}
         {currentScreen === AppScreen.MESSAGES && <MessagesScreen matches={matches} onSelectChat={openChat} />}
         {currentScreen === AppScreen.PROFILE && currentUser && <ProfileScreen user={currentUser} setUser={setCurrentUser} onSignOut={() => setShowFeedback(true)} matches={matches} lang={lang} />}
-        {currentScreen === AppScreen.CHAT && activeChat && user && <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} lang={lang} onReport={handleReport} onBlock={handleBlock} onUnmatch={handleUnmatch} />}
+        {currentScreen === AppScreen.CHAT && activeChat && user && <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} lang={lang} onReport={handleReport} onBlock={handleBlock} onUnmatch={handleUnmatch} onStartCall={handleStartCall} />}
       </main>
 
       {currentScreen !== AppScreen.CHAT && <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} matches={matches} likesCount={likesCount} />}
