@@ -94,7 +94,7 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
 
   return (
     <div className="h-full flex flex-col bg-white">
-      <div className="relative h-72 w-full">
+      <div className="relative h-[45vh] min-h-72 w-full">
         {user.images[activePhoto] ? (
           <img src={cloudinaryUrl(user.images[activePhoto], 900, 650)} className="w-full h-full object-cover" alt="Profil" />
         ) : (

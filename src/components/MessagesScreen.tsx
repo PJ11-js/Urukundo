@@ -73,6 +73,14 @@ const MessagesScreen: React.FC<Props> = ({ matches, onSelectChat }) => {
           )}
         </div>
       </section>
+
+      {matches.length > 0 && (
+        <div className="text-center py-10">
+          <i className="fa-solid fa-heart-circle-check text-gray-200 text-4xl mb-3 block"></i>
+          <p className="text-gray-400 text-sm">C'est tout pour le moment</p>
+          <p className="text-gray-300 text-xs mt-1">Continue à swiper pour trouver plus de matchs !</p>
+        </div>
+      )}
     </div>
   );
 };
