@@ -6,7 +6,7 @@ export const generateBio = async (interests: string[], name: string): Promise<st
   try {
     if (!apiKey) return "Looking for a meaningful connection. Amahoro! 🇧🇮";
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
     const result = await model.generateContent(
       `Create a charming, authentic Burundian dating bio for someone named ${name} who likes ${interests.join(', ')}. Keep it warm, use a bit of Kirundi if appropriate (like 'Amahoro'), and make it engaging. Max 2 sentences.`
     );
@@ -30,10 +30,10 @@ export const moderateImage = async (file: File): Promise<boolean> => {
     if (!apiKey) return true;
     const base64 = await fileToBase64(file);
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
     const result = await model.generateContent([
       { inlineData: { data: base64, mimeType: file.type || 'image/jpeg' } },
-      { text: 'You are a content moderator for a dating app profile photo. Reply with exactly one word: SAFE if this is an appropriate profile photo (a normal photo of a person, place, or object, fully clothed, no nudity, no sexual content, no violence, no weapons as the main subject, no hate symbols). Reply UNSAFE otherwise. Only reply SAFE or UNSAFE, nothing else.' },
+      { text: 'You are a content moderator for a dating app. You will be shown an image a user wants to use as their profile photo. Reply UNSAFE only if the image clearly contains one of: nudity or sexual content, graphic violence or gore, firearms/weapons as the main subject, or hate symbols. For everything else — including normal photos of people, pets, landscapes, screenshots, memes, or any other everyday image — reply SAFE. Reply with exactly one word: SAFE or UNSAFE, nothing else.' },
     ]);
     const text = (result.response.text() || '').trim().toUpperCase();
     return !text.includes('UNSAFE');
@@ -50,7 +50,7 @@ export const getConversationStarter = async (
   try {
     if (!apiKey) return `Hello ${partnerName}! How is your day going?`;
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
     const result = await model.generateContent(
       `Generate a creative and respectful first message for a dating app. The person's name is ${partnerName} and they like ${partnerInterests.join(', ')}. The context is Burundi (Bujumbura/Gitega). Keep it short and friendly.`
     );
