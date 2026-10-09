@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { uploadImage, cloudinaryUrl } from '../services/cloudinaryService';
+import { moderateImage } from '../services/geminiService';
 import { UserProfile } from '../types';
 import DiscoverySettingsScreen from './DiscoverySettingsScreen';
 import SafetyScreen from './SafetyScreen';
@@ -37,13 +38,18 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
     setIsUploading(true);
     try {
       const newUrls: string[] = [];
+      let rejected = 0;
       for (const file of files) {
+        if (!(await moderateImage(file))) { rejected++; continue; }
         const url = await uploadImage(file, user.id);
         newUrls.push(url);
       }
-      const updatedImages = [...user.images, ...newUrls];
-      await updateDoc(doc(db, 'users', user.id), { images: updatedImages, photoURL: updatedImages[0] || '' });
-      setUser(prev => prev ? { ...prev, images: updatedImages } : null);
+      if (newUrls.length) {
+        const updatedImages = [...user.images, ...newUrls];
+        await updateDoc(doc(db, 'users', user.id), { images: updatedImages, photoURL: updatedImages[0] || '' });
+        setUser(prev => prev ? { ...prev, images: updatedImages } : null);
+      }
+      if (rejected > 0) alert(`${rejected} photo(s) refusée(s) : contenu non conforme à nos règles.`);
     } catch { alert('Erreur upload.'); }
     setIsUploading(false);
   };

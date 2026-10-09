@@ -4,7 +4,6 @@ import { doc, getDoc, setDoc, deleteDoc, collection, getDocs, query, where, addD
 import { auth, db } from './firebase';
 import { AppScreen, UserProfile, ChatSession } from './types';
 import { getCurrentPosition, calculateDistance, reverseGeocode } from './services/locationService';
-import { calculateCompatibility, isMatch } from './services/matchingService';
 import { registerPush, notifyUser } from './services/pushService';
 import LoginScreen from './components/LoginScreen';
 import LegalScreen from './components/LegalScreen';
@@ -19,17 +18,6 @@ import InstallBanner from './components/InstallBanner';
 import GenderUpdateScreen from './components/GenderUpdateScreen';
 import BottomNav from './components/BottomNav';
 import ThemeToggle, { Theme } from './components/ThemeToggle';
-
-const DEMO_PROFILES: UserProfile[] = [
-  { id: 'demo1', name: 'Amina', age: 23, gender: 'femme', bio: 'Amahoro ! Étudiante en droit à Bujumbura. 🇧🇮', location: 'Bujumbura, Burundi', country: 'Burundi', images: ['https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=600&h=800&fit=crop&crop=face'], interests: ['Danse', 'Droit', 'Culture', 'Musique'], distance: 2, isDemo: true },
-  { id: 'demo3', name: 'Grace', age: 25, gender: 'femme', bio: 'Infirmière à Paris. La musique africaine est ma passion.', location: 'Paris, France', country: 'France', images: ['https://images.unsplash.com/photo-1589156280159-27698a70f29e?w=600&h=800&fit=crop&crop=face'], interests: ['Musique', 'Santé', 'Voyage', 'Mode'], distance: 200, isDemo: true },
-  { id: 'demo5', name: 'Sandrine', age: 26, gender: 'femme', bio: 'Comptable à Gitega. Fan de football. 🇧🇮', location: 'Gitega, Burundi', country: 'Burundi', images: ['https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&h=800&fit=crop&crop=face'], interests: ['Football', 'Nature', 'Lecture', 'Voyage'], distance: 45, isDemo: true },
-  { id: 'demo7', name: 'Clarisse', age: 24, gender: 'femme', bio: 'Enseignante à Bujumbura. 🌍', location: 'Bujumbura, Burundi', country: 'Burundi', images: ['https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=600&h=800&fit=crop&crop=face'], interests: ['Éducation', 'Culture', 'Lecture', 'Danse'], distance: 5, isDemo: true },
-  { id: 'demo2', name: 'Jean-Pierre', age: 28, gender: 'homme', bio: 'Ingénieur à Bruxelles, fier Burundais.', location: 'Bruxelles, Belgique', country: 'Belgique', images: ['https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?w=600&h=800&fit=crop&crop=face'], interests: ['Tech', 'Football', 'Voyage', 'Cuisine'], distance: 150, isDemo: true },
-  { id: 'demo4', name: 'Emmanuel', age: 31, gender: 'homme', bio: 'Entrepreneur à Montréal. Burundais dans l\'âme.', location: 'Montréal, Canada', country: 'Canada', images: ['https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=800&fit=crop&crop=face'], interests: ['Business', 'Cuisine', 'Sport', 'Musique'], distance: 500, isDemo: true },
-  { id: 'demo6', name: 'Patrick', age: 29, gender: 'homme', bio: 'Musicien à Nairobi. Amahoro !', location: 'Nairobi, Kenya', country: 'Kenya', images: ['https://images.unsplash.com/photo-1522529599102-193c0d76b5b6?w=600&h=800&fit=crop&crop=face'], interests: ['Musique', 'Art', 'Culture', 'Voyage'], distance: 800, isDemo: true },
-  { id: 'demo8', name: 'Thierry', age: 33, gender: 'homme', bio: 'Médecin à Londres.', location: 'Londres, UK', country: 'UK', images: ['https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&h=800&fit=crop&crop=face'], interests: ['Santé', 'Sport', 'Voyage', 'Cinéma'], distance: 300, isDemo: true },
-];
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -155,24 +143,20 @@ const App: React.FC = () => {
     const lookingForGender = settingsGender !== undefined ? settingsGender : (myGender === 'homme' ? 'femme' : myGender === 'femme' ? 'homme' : null);
 
     let filteredReal = lookingForGender ? allRealUsers.filter(u => !u.gender || u.gender === lookingForGender) : allRealUsers;
-    let filteredDemo = lookingForGender ? DEMO_PROFILES.filter(d => d.gender === lookingForGender) : DEMO_PROFILES;
 
     if (settings) {
       filteredReal = filteredReal.filter(u => u.age === undefined || (u.age >= settings.ageMin && u.age <= settings.ageMax));
-      filteredDemo = filteredDemo.filter(d => d.age === undefined || (d.age >= settings.ageMin && d.age <= settings.ageMax));
       if (settings.distance < 500) {
         filteredReal = filteredReal.filter(u => u.distance === undefined || u.distance <= settings.distance);
-        filteredDemo = filteredDemo.filter(d => d.distance === undefined || d.distance <= settings.distance);
       }
     }
 
     if (countryFilter) {
       const needle = countryFilter.trim().toLowerCase();
       filteredReal = filteredReal.filter(u => (u.country || u.location || '').toLowerCase().includes(needle));
-      filteredDemo = filteredDemo.filter(d => (d.country || d.location || '').toLowerCase().includes(needle));
     }
 
-    setProfiles([...filteredReal, ...filteredDemo]);
+    setProfiles(filteredReal);
   }, [allRealUsers, countryFilter, currentUser?.gender, currentUser?.settings]);
 
   const handleCountrySearch = (country: string): boolean => {
@@ -193,11 +177,9 @@ const App: React.FC = () => {
   const createMatch = async (myUid: string, partner: UserProfile) => {
     const matchId = matchDocId(myUid, partner.id);
     await setDoc(doc(db, 'matches', matchId), { users: [myUid, partner.id], createdAt: serverTimestamp() }, { merge: true });
-    if (!partner.isDemo) {
-      const name = currentUser?.name || (lang === 'fr' ? 'Quelqu\'un' : 'Someone');
-      notifyUser(partner.id, lang === 'fr' ? 'Nouveau match ! 🇧🇮' : 'New match! 🇧🇮',
-        lang === 'fr' ? `${name} et toi avez matché sur Urukundo` : `You and ${name} matched on Urukundo`);
-    }
+    const name = currentUser?.name || (lang === 'fr' ? 'Quelqu\'un' : 'Someone');
+    notifyUser(partner.id, lang === 'fr' ? 'Nouveau match ! 🇧🇮' : 'New match! 🇧🇮',
+      lang === 'fr' ? `${name} et toi avez matché sur Urukundo` : `You and ${name} matched on Urukundo`);
   };
 
   // Écoute en temps réel des matchs persistés (survit aux rechargements,
@@ -210,13 +192,11 @@ const App: React.FC = () => {
         const data = d.data() as any;
         const partnerId = (data.users as string[]).find(id => id !== user.uid);
         if (!partnerId) return null;
-        let partner: UserProfile | undefined = DEMO_PROFILES.find(p => p.id === partnerId);
-        if (!partner) {
-          try {
-            const pSnap = await getDoc(doc(db, 'users', partnerId));
-            if (pSnap.exists()) partner = pSnap.data() as UserProfile;
-          } catch {}
-        }
+        let partner: UserProfile | undefined;
+        try {
+          const pSnap = await getDoc(doc(db, 'users', partnerId));
+          if (pSnap.exists()) partner = pSnap.data() as UserProfile;
+        } catch {}
         if (!partner) return null;
         const previewText = data.lastMessageText || (lang === 'fr' ? `C'est un match ! Amahoro ! 🇧🇮` : `It's a match! Amahoro! 🇧🇮`);
         const previewSenderId = data.lastMessageSenderId || partner.id;
@@ -245,19 +225,8 @@ const App: React.FC = () => {
     }
   };
 
-  const refillProfiles = (prev: UserProfile[], removedId: string): UserProfile[] => {
-    const updated = prev.filter(p => p.id !== removedId);
-    if (updated.length > 0) return updated;
-    // Remettre les profils démo quand tout est épuisé
-    const gender = currentUser?.gender;
-    const lookingFor = gender === 'homme' ? 'femme' : gender === 'femme' ? 'homme' : null;
-    let demos = lookingFor ? DEMO_PROFILES.filter(d => d.gender === lookingFor) : DEMO_PROFILES;
-    if (countryFilter) {
-      const needle = countryFilter.trim().toLowerCase();
-      demos = demos.filter(d => (d.country || d.location || '').toLowerCase().includes(needle));
-    }
-    return demos;
-  };
+  const refillProfiles = (prev: UserProfile[], removedId: string): UserProfile[] =>
+    prev.filter(p => p.id !== removedId);
 
   const canSuperLike = (): boolean => {
     if (!currentUser) return false;
@@ -274,19 +243,14 @@ const App: React.FC = () => {
 
     const alreadyMatched = matches.some(m => m.partner.id === profile.id);
     if (!alreadyMatched) {
-      if (profile.isDemo) {
-        // Super like = match garanti avec les profils démo.
-        createMatch(user.uid, profile).catch(() => {});
-      } else {
-        addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp(), type: 'super' }).catch(() => {});
-        (async () => {
-          try {
-            const q = query(collection(db, 'likes'), where('fromUserId', '==', profile.id), where('toUserId', '==', user.uid));
-            const snap = await getDocs(q);
-            if (!snap.empty) await createMatch(user.uid, profile);
-          } catch {}
-        })();
-      }
+      addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp(), type: 'super' }).catch(() => {});
+      (async () => {
+        try {
+          const q = query(collection(db, 'likes'), where('fromUserId', '==', profile.id), where('toUserId', '==', user.uid));
+          const snap = await getDocs(q);
+          if (!snap.empty) await createMatch(user.uid, profile);
+        } catch {}
+      })();
     }
     setProfiles(prev => refillProfiles(prev, profile.id));
   };
@@ -308,19 +272,13 @@ const App: React.FC = () => {
     if (user) {
       const alreadyMatched = matches.some(m => m.partner.id === profile.id);
       if (!alreadyMatched) {
-        if (profile.isDemo) {
-          // Pas de vraie personne en face : on simule une chance de match.
-          const compatibility = currentUser ? calculateCompatibility(currentUser, profile) : 50;
-          if (isMatch(compatibility)) await createMatch(user.uid, profile).catch(() => {});
-        } else {
-          addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp() }).catch(() => {});
-          try {
-            // Match réel seulement si cette personne t'a déjà liké en retour.
-            const q = query(collection(db, 'likes'), where('fromUserId', '==', profile.id), where('toUserId', '==', user.uid));
-            const snap = await getDocs(q);
-            if (!snap.empty) await createMatch(user.uid, profile);
-          } catch {}
-        }
+        addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp() }).catch(() => {});
+        try {
+          // Match réel seulement si cette personne t'a déjà liké en retour.
+          const q = query(collection(db, 'likes'), where('fromUserId', '==', profile.id), where('toUserId', '==', user.uid));
+          const snap = await getDocs(q);
+          if (!snap.empty) await createMatch(user.uid, profile);
+        } catch {}
       }
     }
     setProfiles(prev => refillProfiles(prev, profile.id));
@@ -333,7 +291,7 @@ const App: React.FC = () => {
     setProfiles(prev => prev.filter(p => p.id !== profile.id));
     setAllRealUsers(prev => prev.filter(p => p.id !== profile.id));
     if (currentScreen === AppScreen.CHAT) { setActiveChat(null); setCurrentScreen(AppScreen.MESSAGES); }
-    if (!user || profile.isDemo) return;
+    if (!user) return;
     try {
       await setDoc(doc(db, 'blocks', `${user.uid}_${profile.id}`), { blockerId: user.uid, blockedId: profile.id, timestamp: serverTimestamp() });
       await deleteDoc(doc(db, 'matches', matchDocId(user.uid, profile.id)));
@@ -341,7 +299,7 @@ const App: React.FC = () => {
   };
 
   const handleReport = async (profile: UserProfile, reason: string) => {
-    if (!user || profile.isDemo) return;
+    if (!user) return;
     try {
       await addDoc(collection(db, 'reports'), { reporterId: user.uid, reportedId: profile.id, reason, timestamp: serverTimestamp() });
     } catch {}

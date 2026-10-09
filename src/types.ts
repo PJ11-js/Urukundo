@@ -11,7 +11,6 @@ export interface UserProfile {
   photoURL?: string;
   gender?: 'homme' | 'femme';
   lookingFor?: 'homme' | 'femme' | 'tous';
-  isDemo?: boolean;
   lang?: 'fr' | 'en';
   isOnline?: boolean;
   lastSeen?: number;

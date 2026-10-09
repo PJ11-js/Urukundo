@@ -71,7 +71,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   // Suivi GPS tant que CE chat est ouvert et que le partage est activé — pas de
   // suivi en arrière-plan (limite des navigateurs, pas un choix de design).
   useEffect(() => {
-    if (!myLiveLocationOn || session.partner.isDemo) return;
+    if (!myLiveLocationOn) return;
     if (!navigator.geolocation) return;
     const id = navigator.geolocation.watchPosition(
       (pos) => {
@@ -87,7 +87,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
     );
     watchIdRef.current = id;
     return () => { navigator.geolocation.clearWatch(id); watchIdRef.current = null; };
-  }, [myLiveLocationOn, chatId, currentUserId, session.partner.isDemo]);
+  }, [myLiveLocationOn, chatId, currentUserId]);
 
   const toggleLiveLocation = async () => {
     if (myLiveLocationOn) {
@@ -121,9 +121,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
         senderId: currentUserId, text, timestamp: serverTimestamp(),
       });
       setDoc(doc(db, 'matches', chatId), { lastMessageText: text, lastMessageSenderId: currentUserId, lastMessageAt: serverTimestamp() }, { merge: true }).catch(() => {});
-      if (!session.partner.isDemo) {
-        notifyUser(session.partner.id, lang === 'fr' ? '💬 Nouveau message' : '💬 New message', text);
-      }
+      notifyUser(session.partner.id, lang === 'fr' ? '💬 Nouveau message' : '💬 New message', text);
     } catch (err) { console.error(err); }
   };
 
@@ -159,11 +157,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
         )}
         <div className="flex-1">
           <h4 className="font-bold text-gray-800 leading-none">{session.partner.name}</h4>
-          {session.partner.isDemo ? (
-            <span className="text-[10px] text-gray-400 font-medium italic">IA prototype</span>
-          ) : (
-            <span className="text-[10px] text-green-500 font-medium">● {lang === 'fr' ? 'En ligne' : 'Online'}</span>
-          )}
+          <span className="text-[10px] text-green-500 font-medium">● {lang === 'fr' ? 'En ligne' : 'Online'}</span>
         </div>
         <button onClick={handleWhatsApp}
           className="w-9 h-9 rounded-full bg-green-500 text-white flex items-center justify-center shadow-md">
@@ -178,13 +172,11 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
                 <div className="absolute right-0 top-10 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-20" style={{ minWidth: 140 }}>
-                  {!session.partner.isDemo && (
-                    <button onClick={toggleLiveLocation}
-                      className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100">
-                      <i className={`fa-solid fa-location-dot ${myLiveLocationOn ? 'text-blue-500' : 'text-gray-400'}`}></i>
-                      {myLiveLocationOn ? t.stopSharing : t.shareLocation}
-                    </button>
-                  )}
+                  <button onClick={toggleLiveLocation}
+                    className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 border-b border-gray-100">
+                    <i className={`fa-solid fa-location-dot ${myLiveLocationOn ? 'text-blue-500' : 'text-gray-400'}`}></i>
+                    {myLiveLocationOn ? t.stopSharing : t.shareLocation}
+                  </button>
                   {onReport && (
                     <button onClick={() => { setShowReportReasons(true); setShowMenu(false); }}
                       className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">

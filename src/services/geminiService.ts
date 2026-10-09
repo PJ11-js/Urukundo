@@ -17,6 +17,32 @@ export const generateBio = async (interests: string[], name: string): Promise<st
   }
 };
 
+const fileToBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+export const moderateImage = async (file: File): Promise<boolean> => {
+  try {
+    if (!apiKey) return true;
+    const base64 = await fileToBase64(file);
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const result = await model.generateContent([
+      { inlineData: { data: base64, mimeType: file.type || 'image/jpeg' } },
+      { text: 'You are a content moderator for a dating app profile photo. Reply with exactly one word: SAFE if this is an appropriate profile photo (a normal photo of a person, place, or object, fully clothed, no nudity, no sexual content, no violence, no weapons as the main subject, no hate symbols). Reply UNSAFE otherwise. Only reply SAFE or UNSAFE, nothing else.' },
+    ]);
+    const text = (result.response.text() || '').trim().toUpperCase();
+    return !text.includes('UNSAFE');
+  } catch (error) {
+    console.error('Error moderating image:', error);
+    return true; // ne bloque pas l'upload si la modération est indisponible
+  }
+};
+
 export const getConversationStarter = async (
   partnerName: string,
   partnerInterests: string[]

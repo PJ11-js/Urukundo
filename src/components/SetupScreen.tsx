@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { uploadImage } from '../services/cloudinaryService';
+import { moderateImage } from '../services/geminiService';
 import { reverseGeocode } from '../services/locationService';
 import { UserProfile } from '../types';
 
@@ -31,6 +32,8 @@ const T = {
     next: 'Continuer →', join: '🇧🇮 Rejoindre Urukundo !', creating: '⏳ Création...',
     errorInterests: 'Choisis au moins 3 intérêts !', errorGeneral: 'Erreur. Réessaie.',
     add: 'Ajouter', max6: 'Maximum 6 photos !', main: 'Principal',
+    photoRejected: 'Une ou plusieurs photos ont été refusées (contenu non conforme à nos règles).',
+    moderating: 'Vérification...',
   },
   en: {
     step1: '👤 Your profile', step2: '📍 Your location', step3: '✨ Your interests',
@@ -47,6 +50,8 @@ const T = {
     next: 'Continue →', join: '🇧🇮 Join Urukundo!', creating: '⏳ Creating...',
     errorInterests: 'Choose at least 3 interests!', errorGeneral: 'Error. Try again.',
     add: 'Add', max6: 'Maximum 6 photos!', main: 'Main',
+    photoRejected: 'One or more photos were rejected (content doesn\'t meet our guidelines).',
+    moderating: 'Checking...',
   }
 };
 
@@ -68,6 +73,7 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isModerating, setIsModerating] = useState(false);
 
   const getGPSLocation = () => {
     setLocationLoading(true);
@@ -96,15 +102,21 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
     setInterests(prev => prev.includes(interest) ? prev.filter(i => i !== interest) : [...prev, interest]);
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (images.length + files.length > 6) { alert(t.max6); return; }
-    setImages(prev => [...prev, ...files]);
-    files.forEach(file => {
+    setIsModerating(true);
+    setError('');
+    let rejected = 0;
+    for (const file of files) {
+      if (!(await moderateImage(file))) { rejected++; continue; }
+      setImages(prev => [...prev, file]);
       const reader = new FileReader();
       reader.onload = (ev) => setImagePreviews(prev => [...prev, ev.target?.result as string]);
       reader.readAsDataURL(file);
-    });
+    }
+    if (rejected > 0) setError(t.photoRejected);
+    setIsModerating(false);
   };
 
   const removeImage = (index: number) => {
@@ -137,7 +149,6 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
         photoURL: uploadedUrls[0] || '',
         gender: gender as 'homme' | 'femme',
         lookingFor,
-        isDemo: false,
         lang,
         isOnline: true,
         lastSeen: Date.now(),
@@ -177,10 +188,14 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
                   </div>
                 ))}
                 {imagePreviews.length < 6 && (
-                  <label className="aspect-square rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center cursor-pointer hover:border-red-300 transition-all">
-                    <i className="fa-solid fa-plus text-gray-300 text-2xl"></i>
-                    <span className="text-[10px] text-gray-300 mt-1">{t.add}</span>
-                    <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageChange} />
+                  <label className={`aspect-square rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center transition-all ${isModerating ? 'opacity-50' : 'cursor-pointer hover:border-red-300'}`}>
+                    {isModerating ? (
+                      <i className="fa-solid fa-spinner fa-spin text-gray-300 text-2xl"></i>
+                    ) : (
+                      <i className="fa-solid fa-plus text-gray-300 text-2xl"></i>
+                    )}
+                    <span className="text-[10px] text-gray-300 mt-1">{isModerating ? t.moderating : t.add}</span>
+                    <input type="file" accept="image/*" multiple disabled={isModerating} className="hidden" onChange={handleImageChange} />
                   </label>
                 )}
               </div>

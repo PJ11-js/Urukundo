@@ -50,7 +50,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
 
   const T = {
     fr: {
-      noMore: 'Plus de profils', comeback: 'Reviens plus tard !', reload: 'Recharger', ia: 'IA prototype', online: 'En ligne',
+      noMore: 'Plus de profils', comeback: 'Reviens plus tard !', reload: 'Recharger', online: 'En ligne',
       verified: 'Position vérifiée', searchCountry: 'Rechercher un pays', countryPlaceholder: 'Ex: Canada',
       search: 'Chercher', clear: 'Réinitialiser', premiumTitle: '🔒 Fonctionnalité Premium',
       premiumBody: "Passe Premium pour chercher des profils burundais dans n'importe quel pays (Canada, France, Belgique...).",
@@ -66,7 +66,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
       boostOn: 'Boost activé pendant 30 minutes ⚡', boostRunning: 'Boost déjà actif ⚡',
     },
     en: {
-      noMore: 'No more profiles', comeback: 'Come back later!', reload: 'Reload', ia: 'AI prototype', online: 'Online',
+      noMore: 'No more profiles', comeback: 'Come back later!', reload: 'Reload', online: 'Online',
       verified: 'Verified location', searchCountry: 'Search a country', countryPlaceholder: 'E.g. Canada',
       search: 'Search', clear: 'Reset', premiumTitle: '🔒 Premium feature',
       premiumBody: 'Go Premium to search Burundian profiles in any country (Canada, France, Belgium...).',
@@ -484,13 +484,9 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
                 <h2 className="text-2xl font-bold">
                   {currentProfile.name}, {currentProfile.age}
                 </h2>
-                {currentProfile.isDemo ? (
-                  <span className="text-xs bg-gray-500/80 px-2 py-0.5 rounded-full italic">{t.ia}</span>
-                ) : (
-                  <span className="flex items-center gap-1 text-xs bg-green-500/80 px-2 py-0.5 rounded-full">
-                    <i className="fa-solid fa-circle text-[6px]"></i> {t.online}
-                  </span>
-                )}
+                <span className="flex items-center gap-1 text-xs bg-green-500/80 px-2 py-0.5 rounded-full">
+                  <i className="fa-solid fa-circle text-[6px]"></i> {t.online}
+                </span>
               </div>
               <div className="flex items-center gap-2 mt-1 opacity-90 text-xs">
                 <i className="fa-solid fa-location-dot"></i>
