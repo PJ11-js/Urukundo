@@ -5,7 +5,7 @@ import { ChatSession, UserProfile } from '../types';
 import { getConversationStarter } from '../services/geminiService';
 import { notifyUser } from '../services/pushService';
 import { calculateDistance } from '../services/locationService';
-import { cloudinaryUrl } from '../services/cloudinaryService';
+import { cloudinaryUrl, uploadAudio } from '../services/cloudinaryService';
 import LiveLocationMap from './LiveLocationMap';
 
 interface Props {
@@ -34,17 +34,27 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   const inputRef = useRef<HTMLInputElement>(null);
   const watchIdRef = useRef<number | null>(null);
   const lastSentAtRef = useRef(0);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [isSendingAudio, setIsSendingAudio] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<number | null>(null);
   const chatId = [currentUserId, session.partner.id].sort().join('_');
 
   const T = {
     fr: { matched: 'Vous avez matché 🎉 Amahoro !', placeholder: 'Écris un message...', wingman: 'AI WINGMAN : SUGGÈRE UNE RÉPONSE', thinking: 'Réflexion...', whatsappPrompt: 'Entre ton numéro WhatsApp :', call: 'Appeler', report: 'Signaler', block: 'Bloquer', cancel: 'Annuler', reportTitle: 'Pourquoi signaler ce profil ?', blockTitle: 'Bloquer ce profil ?', blockBody: "Cette personne ne pourra plus voir ton profil, ni toi le sien.", blockConfirm: 'Bloquer',
       shareLocation: 'Partager ma position en direct', stopSharing: 'Arrêter le partage de position',
       waitingPartner: (name: string) => `En attente que ${name} active aussi le partage 📍`,
-      locationDenied: 'Position refusée. Active la localisation pour partager.' },
+      locationDenied: 'Position refusée. Active la localisation pour partager.',
+      micDenied: "Micro refusé. Autorise l'accès au micro pour envoyer un message vocal.",
+      audioError: "Erreur lors de l'envoi du message vocal.", voiceMessage: '🎤 Message vocal' },
     en: { matched: 'You matched 🎉 Amahoro!', placeholder: 'Type a message...', wingman: 'AI WINGMAN: SUGGEST A REPLY', thinking: 'Thinking...', whatsappPrompt: 'Enter your WhatsApp number:', call: 'Call', report: 'Report', block: 'Block', cancel: 'Cancel', reportTitle: 'Why are you reporting this profile?', blockTitle: 'Block this profile?', blockBody: "This person won't be able to see your profile, or you theirs.", blockConfirm: 'Block',
       shareLocation: 'Share my live location', stopSharing: 'Stop sharing location',
       waitingPartner: (name: string) => `Waiting for ${name} to also enable sharing 📍`,
-      locationDenied: 'Location denied. Enable it to share.' }
+      locationDenied: 'Location denied. Enable it to share.',
+      micDenied: 'Microphone denied. Allow microphone access to send a voice message.',
+      audioError: 'Error sending voice message.', voiceMessage: '🎤 Voice message' }
   };
   const t = T[lang];
   const reportReasons = lang === 'fr' ? REPORT_REASONS_FR : REPORT_REASONS_EN;
@@ -123,6 +133,54 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       setDoc(doc(db, 'matches', chatId), { lastMessageText: text, lastMessageSenderId: currentUserId, lastMessageAt: serverTimestamp() }, { merge: true }).catch(() => {});
       notifyUser(session.partner.id, lang === 'fr' ? '💬 Nouveau message' : '💬 New message', text);
     } catch (err) { console.error(err); }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+      setRecordSeconds(0);
+      recordTimerRef.current = window.setInterval(() => setRecordSeconds(s => s + 1), 1000);
+    } catch {
+      alert(t.micDenied);
+    }
+  };
+
+  const stopRecording = (send: boolean) => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
+    if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null; }
+    const duration = recordSeconds;
+    recorder.onstop = async () => {
+      recorder.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+      setRecordSeconds(0);
+      if (send && audioChunksRef.current.length) {
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        await sendAudioMessage(blob, duration);
+      }
+    };
+    recorder.stop();
+  };
+
+  const sendAudioMessage = async (blob: Blob, duration: number) => {
+    setIsSendingAudio(true);
+    try {
+      const url = await uploadAudio(blob, currentUserId);
+      await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        senderId: currentUserId, type: 'audio', audioUrl: url, duration, timestamp: serverTimestamp(),
+      });
+      setDoc(doc(db, 'matches', chatId), { lastMessageText: t.voiceMessage, lastMessageSenderId: currentUserId, lastMessageAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      notifyUser(session.partner.id, lang === 'fr' ? '💬 Nouveau message' : '💬 New message', t.voiceMessage);
+    } catch (err) { console.error(err); alert(t.audioError); }
+    setIsSendingAudio(false);
   };
 
   const handleAiWingman = async () => {
@@ -263,8 +321,10 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
           const isMe = msg.senderId === currentUserId;
           return (
             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${isMe ? 'bg-red-500 text-white rounded-br-none' : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-bl-none'}`}>
-                {msg.text}
+              <div className={`max-w-[75%] ${msg.type === 'audio' ? 'p-2' : 'px-4 py-2.5'} rounded-2xl text-sm ${isMe ? 'bg-red-500 text-white rounded-br-none' : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-bl-none'}`}>
+                {msg.type === 'audio' ? (
+                  <audio controls src={msg.audioUrl} style={{ width: 220, height: 32 }} />
+                ) : msg.text}
               </div>
             </div>
           );
@@ -278,16 +338,40 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
             <i className="fa-solid fa-wand-magic-sparkles"></i>
             {isAiLoading ? t.thinking : t.wingman}
           </button>
-          <div className="flex items-center gap-2">
-            <input ref={inputRef} type="text" value={inputText} onChange={(e) => setInputText(e.target.value)}
-              placeholder={t.placeholder} onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              className="flex-1 bg-gray-100 rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-100"
-              style={{ fontSize: '16px' }} />
-            <button onClick={handleSend}
-              className="w-11 h-11 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform flex-shrink-0">
-              <i className="fa-solid fa-paper-plane"></i>
-            </button>
-          </div>
+          {isRecording ? (
+            <div className="flex items-center gap-2">
+              <button onClick={() => stopRecording(false)}
+                className="w-11 h-11 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0">
+                <i className="fa-solid fa-trash"></i>
+              </button>
+              <div className="flex-1 bg-gray-100 rounded-full px-5 py-3 text-sm flex items-center gap-2 text-red-500 font-medium">
+                <i className="fa-solid fa-circle text-[8px] animate-pulse"></i>
+                {Math.floor(recordSeconds / 60)}:{String(recordSeconds % 60).padStart(2, '0')}
+              </div>
+              <button onClick={() => stopRecording(true)}
+                className="w-11 h-11 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform flex-shrink-0">
+                <i className="fa-solid fa-check"></i>
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input ref={inputRef} type="text" value={inputText} onChange={(e) => setInputText(e.target.value)}
+                placeholder={t.placeholder} onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                className="flex-1 bg-gray-100 rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-100"
+                style={{ fontSize: '16px' }} />
+              {inputText.trim() ? (
+                <button onClick={handleSend}
+                  className="w-11 h-11 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform flex-shrink-0">
+                  <i className="fa-solid fa-paper-plane"></i>
+                </button>
+              ) : (
+                <button onClick={startRecording} disabled={isSendingAudio}
+                  className="w-11 h-11 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform flex-shrink-0 disabled:opacity-50">
+                  <i className={`fa-solid ${isSendingAudio ? 'fa-spinner fa-spin' : 'fa-microphone'}`}></i>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

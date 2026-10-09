@@ -18,6 +18,24 @@ export const uploadImage = async (file: File, userId: string): Promise<string> =
   return data.secure_url;
 };
 
+// Cloudinary range les fichiers audio sous le resource_type "video".
+export const uploadAudio = async (blob: Blob, userId: string): Promise<string> => {
+  const formData = new FormData();
+  formData.append('file', blob, `voice_${Date.now()}.webm`);
+  formData.append('upload_preset', UPLOAD_PRESET);
+  formData.append('folder', `urukundo/voice/${userId}`);
+  formData.append('public_id', `voice_${userId}_${Date.now()}`);
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/video/upload`,
+    { method: 'POST', body: formData }
+  );
+
+  if (!response.ok) throw new Error('Upload échoué');
+  const data = await response.json();
+  return data.secure_url;
+};
+
 // Force un recadrage propre (proportionnel, visage centré) à l'affichage,
 // quelle que soit la transformation déjà présente dans l'URL stockée —
 // certains presets d'upload appliquent un redimensionnement non proportionnel
