@@ -86,7 +86,7 @@ const LikesScreen: React.FC<Props> = ({ currentUserId, currentUserName, onMatch 
                 <img src={cloudinaryUrl(profile.images[0], 420, 400)} className="w-full h-48 object-cover" alt={profile.name} />
               ) : (
                 <div className="w-full h-48 bg-gradient-to-br from-red-100 to-green-100 flex items-center justify-center">
-                  <span className="text-5xl font-bold text-white">{profile.name[0]}</span>
+                  <span className="text-5xl font-bold text-red-300">{profile.name[0]}</span>
                 </div>
               )}
               {profile.isSuper && (
