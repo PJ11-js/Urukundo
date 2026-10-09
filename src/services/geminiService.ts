@@ -43,20 +43,38 @@ export const moderateImage = async (file: File): Promise<boolean> => {
   }
 };
 
+interface ChatMessage {
+  senderId: string;
+  text: string;
+}
+
 export const getConversationStarter = async (
   partnerName: string,
-  partnerInterests: string[]
+  partnerInterests: string[],
+  currentUserId: string,
+  messages: ChatMessage[] = [],
+  lang: 'fr' | 'en' = 'fr'
 ): Promise<string> => {
+  const langInstruction = lang === 'fr' ? 'Réponds en français.' : 'Reply in English.';
+  const fallback = lang === 'fr' ? `Salut ${partnerName} ! Comment se passe ta journée ?` : `Hi ${partnerName}! How is your day going?`;
   try {
-    if (!apiKey) return `Hello ${partnerName}! How is your day going?`;
+    if (!apiKey) return fallback;
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
-    const result = await model.generateContent(
-      `Generate a creative and respectful first message for a dating app. The person's name is ${partnerName} and they like ${partnerInterests.join(', ')}. The context is Burundi (Bujumbura/Gitega). Keep it short and friendly.`
-    );
-    return result.response.text() || 'Hello! I saw your profile and thought we might have some things in common.';
+
+    const recentHistory = messages.slice(-6)
+      .map(m => `${m.senderId === currentUserId ? 'Moi' : partnerName}: ${m.text}`)
+      .join('\n');
+    const lastFromPartner = [...messages].reverse().find(m => m.senderId !== currentUserId);
+
+    const prompt = lastFromPartner
+      ? `Tu es un assistant qui aide quelqu'un à répondre sur une app de rencontre burundaise. Voici les derniers messages de la conversation avec ${partnerName} :\n${recentHistory}\n\nPropose une réponse courte, naturelle et bienveillante au dernier message de ${partnerName} ("${lastFromPartner.text}"). ${langInstruction} Ne mets pas de guillemets, donne juste le message à envoyer.`
+      : `Génère un message d'ouverture créatif et respectueux pour une app de rencontre. La personne s'appelle ${partnerName} et aime ${partnerInterests.join(', ') || 'rencontrer de nouvelles personnes'}. Le contexte est le Burundi (Bujumbura/Gitega). ${langInstruction} Reste court et chaleureux. Ne mets pas de guillemets, donne juste le message à envoyer.`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text()?.trim() || fallback;
   } catch (error) {
     console.error('Error generating starter:', error);
-    return `Hi ${partnerName}! How is your day going?`;
+    return fallback;
   }
 };

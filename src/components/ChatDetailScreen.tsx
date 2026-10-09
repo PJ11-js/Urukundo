@@ -37,11 +37,11 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   const chatId = [currentUserId, session.partner.id].sort().join('_');
 
   const T = {
-    fr: { matched: 'Vous avez matché 🎉 Amahoro !', placeholder: 'Écris un message...', wingman: 'AI WINGMAN : SUGGÈRE UNE ACCROCHE', thinking: 'Réflexion...', whatsappPrompt: 'Entre ton numéro WhatsApp :', call: 'Appeler', report: 'Signaler', block: 'Bloquer', cancel: 'Annuler', reportTitle: 'Pourquoi signaler ce profil ?', blockTitle: 'Bloquer ce profil ?', blockBody: "Cette personne ne pourra plus voir ton profil, ni toi le sien.", blockConfirm: 'Bloquer',
+    fr: { matched: 'Vous avez matché 🎉 Amahoro !', placeholder: 'Écris un message...', wingman: 'AI WINGMAN : SUGGÈRE UNE RÉPONSE', thinking: 'Réflexion...', whatsappPrompt: 'Entre ton numéro WhatsApp :', call: 'Appeler', report: 'Signaler', block: 'Bloquer', cancel: 'Annuler', reportTitle: 'Pourquoi signaler ce profil ?', blockTitle: 'Bloquer ce profil ?', blockBody: "Cette personne ne pourra plus voir ton profil, ni toi le sien.", blockConfirm: 'Bloquer',
       shareLocation: 'Partager ma position en direct', stopSharing: 'Arrêter le partage de position',
       waitingPartner: (name: string) => `En attente que ${name} active aussi le partage 📍`,
       locationDenied: 'Position refusée. Active la localisation pour partager.' },
-    en: { matched: 'You matched 🎉 Amahoro!', placeholder: 'Type a message...', wingman: 'AI WINGMAN: SUGGEST AN OPENER', thinking: 'Thinking...', whatsappPrompt: 'Enter your WhatsApp number:', call: 'Call', report: 'Report', block: 'Block', cancel: 'Cancel', reportTitle: 'Why are you reporting this profile?', blockTitle: 'Block this profile?', blockBody: "This person won't be able to see your profile, or you theirs.", blockConfirm: 'Block',
+    en: { matched: 'You matched 🎉 Amahoro!', placeholder: 'Type a message...', wingman: 'AI WINGMAN: SUGGEST A REPLY', thinking: 'Thinking...', whatsappPrompt: 'Enter your WhatsApp number:', call: 'Call', report: 'Report', block: 'Block', cancel: 'Cancel', reportTitle: 'Why are you reporting this profile?', blockTitle: 'Block this profile?', blockBody: "This person won't be able to see your profile, or you theirs.", blockConfirm: 'Block',
       shareLocation: 'Share my live location', stopSharing: 'Stop sharing location',
       waitingPartner: (name: string) => `Waiting for ${name} to also enable sharing 📍`,
       locationDenied: 'Location denied. Enable it to share.' }
@@ -127,7 +127,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
 
   const handleAiWingman = async () => {
     setIsAiLoading(true);
-    const suggestion = await getConversationStarter(session.partner.name, session.partner.interests);
+    const suggestion = await getConversationStarter(session.partner.name, session.partner.interests, currentUserId, messages, lang);
     setInputText(suggestion);
     setIsAiLoading(false);
     inputRef.current?.focus();
