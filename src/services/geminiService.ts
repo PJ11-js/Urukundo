@@ -59,6 +59,44 @@ export const moderateImage = async (file: File): Promise<boolean> => {
   }
 };
 
+const urlToBase64 = async (url: string): Promise<{ data: string; mimeType: string }> => {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  const data = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+  return { data, mimeType: blob.type || 'image/jpeg' };
+};
+
+// Vérification d'identité : compare un selfie pris en direct à la photo de
+// profil existante. Sans clé API on ne peut pas vérifier honnêtement, donc
+// on refuse le badge plutôt que de l'accorder par défaut (contraire à
+// moderateImage, qui fail-open par prudence sur un blocage non voulu).
+export const verifyIdentitySelfie = async (selfieFile: File, profilePhotoUrl: string): Promise<boolean> => {
+  try {
+    if (!apiKey) return false;
+    const [selfieBase64, profile] = await Promise.all([
+      fileToBase64(selfieFile),
+      urlToBase64(profilePhotoUrl),
+    ]);
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+    const result = await withRetry(() => model.generateContent([
+      { inlineData: { data: profile.data, mimeType: profile.mimeType } },
+      { inlineData: { data: selfieBase64, mimeType: selfieFile.type || 'image/jpeg' } },
+      { text: 'The first image is a dating app profile photo. The second image is a live selfie just taken by the account holder to verify their identity. Reply MATCH if the two images plausibly show the same person (allow for different lighting, angle, expression, or photo quality/filters). Reply NO_MATCH if they clearly show different people, or if the second image does not clearly show a single human face. Reply with exactly one word: MATCH or NO_MATCH.' },
+    ]));
+    const text = (result.response.text() || '').trim().toUpperCase();
+    return text.includes('MATCH') && !text.includes('NO_MATCH');
+  } catch (error) {
+    console.error('Error verifying identity:', error);
+    return false;
+  }
+};
+
 interface ChatMessage {
   senderId: string;
   text: string;

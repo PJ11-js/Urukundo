@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { uploadImage, cloudinaryUrl } from '../services/cloudinaryService';
-import { moderateImage } from '../services/geminiService';
+import { moderateImage, verifyIdentitySelfie } from '../services/geminiService';
 import { UserProfile, ChatSession } from '../types';
 import DiscoverySettingsScreen from './DiscoverySettingsScreen';
 import SafetyScreen from './SafetyScreen';
@@ -27,6 +27,7 @@ const PROMPT_QUESTIONS = [
 
 const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lang }) => {
   const [isUploading, setIsUploading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [subScreen, setSubScreen] = useState<'main' | 'discovery' | 'safety' | 'ai'>('main');
   const [activePhoto, setActivePhoto] = useState(0);
   const [showPromptPicker, setShowPromptPicker] = useState(false);
@@ -105,6 +106,23 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
     try { await updateDoc(doc(db, 'users', user.id), { prompts }); } catch {}
   };
 
+  const handleSelfieCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !user.images[0]) return;
+    setIsVerifying(true);
+    try {
+      const match = await verifyIdentitySelfie(file, cloudinaryUrl(user.images[0], 500, 500));
+      if (match) {
+        await updateDoc(doc(db, 'users', user.id), { identityVerified: true });
+        setUser(prev => prev ? { ...prev, identityVerified: true } : null);
+      } else {
+        alert("On n'a pas réussi à confirmer qu'il s'agit bien de toi. Réessaie avec un selfie net, en pleine lumière, visage dégagé.");
+      }
+    } catch { alert('Erreur lors de la vérification.'); }
+    setIsVerifying(false);
+  };
+
   const handleShareApp = async () => {
     if (navigator.share) {
       await navigator.share({ title: 'Urukundo', text: "Rejoins Urukundo 🇧🇮", url: window.location.href });
@@ -169,7 +187,10 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
 
       <div className="p-6 space-y-6 flex-1 overflow-y-auto">
         <div className="flex justify-between items-end">
-          <h3 className="text-2xl font-bold text-gray-800">{user.name}, {user.age}</h3>
+          <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-1.5">
+            {user.name}, {user.age}
+            {user.identityVerified && <i className="fa-solid fa-circle-check text-blue-500 text-base" title="Identité vérifiée"></i>}
+          </h3>
           <span className="text-sm text-gray-500 px-3 py-1 bg-gray-50 rounded-full border border-gray-100 flex items-center gap-1">
             📍 {user.location}
             {user.locationVerified && <i className="fa-solid fa-circle-check text-green-500 text-xs" title="Position vérifiée"></i>}
@@ -229,6 +250,23 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
         </div>
 
         <div className="bg-gray-50 rounded-2xl overflow-hidden divide-y divide-gray-100 pb-8">
+          {user.identityVerified ? (
+            <div className="w-full p-4 flex items-center gap-3 text-blue-500">
+              <i className="fa-solid fa-circle-check"></i>
+              <span className="text-sm font-medium">Identité vérifiée</span>
+            </div>
+          ) : (
+            <label className="w-full p-4 flex justify-between items-center hover:bg-gray-100 cursor-pointer">
+              <div className="flex items-center gap-3">
+                <i className={`fa-solid ${isVerifying ? 'fa-spinner fa-spin' : 'fa-id-badge'} text-blue-500`}></i>
+                <span className="text-sm text-gray-700">
+                  {isVerifying ? 'Vérification en cours...' : 'Vérifier mon profil (badge)'}
+                </span>
+              </div>
+              {!isVerifying && !user.images[0] && <span className="text-[10px] text-gray-400">Ajoute une photo d'abord</span>}
+              <input type="file" accept="image/*" capture="user" className="hidden" disabled={isVerifying || !user.images[0]} onChange={handleSelfieCapture} />
+            </label>
+          )}
           <button onClick={handleTogglePremium}
             className="w-full p-4 flex justify-between items-center hover:bg-gray-100">
             <div className="flex items-center gap-3">

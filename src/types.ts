@@ -16,6 +16,7 @@ export interface UserProfile {
   lastSeen?: number;
   country?: string;
   locationVerified?: boolean;
+  identityVerified?: boolean;
   lat?: number;
   lng?: number;
   isPremium?: boolean;

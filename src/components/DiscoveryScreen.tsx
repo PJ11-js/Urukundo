@@ -7,6 +7,8 @@ interface Props {
   onLike: (profile: UserProfile) => void;
   onDislike: (id: string) => void;
   onUndo: () => void;
+  canUndo?: boolean;
+  onRefresh?: () => void;
   lang?: 'fr' | 'en';
   isPremium?: boolean;
   countryFilter?: string;
@@ -22,7 +24,7 @@ interface Props {
 
 const REPORT_REASONS = ['Faux profil', 'Contenu inapproprié', 'Harcèlement', 'Autre'];
 
-const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo, lang = 'fr', isPremium = false, countryFilter = '', onCountrySearch, onClearCountryFilter, onReport, onBlock, canSuperLike, onSuperLike, boostActive = false, onBoost }) => {
+const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo, canUndo = false, onRefresh, lang = 'fr', isPremium = false, countryFilter = '', onCountrySearch, onClearCountryFilter, onReport, onBlock, canSuperLike, onSuperLike, boostActive = false, onBoost }) => {
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
@@ -64,6 +66,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
       boostTitle: '⚡ Boost indisponible',
       boostBody: "Tu as déjà utilisé ton Boost gratuit du jour (ou il est encore actif). Reviens demain ou passe Premium pour un accès illimité.",
       boostOn: 'Boost activé pendant 30 minutes ⚡', boostRunning: 'Boost déjà actif ⚡',
+      undoLast: 'Annuler mon dernier swipe',
     },
     en: {
       noMore: 'No more profiles', comeback: 'Come back later!', reload: 'Reload', online: 'Online',
@@ -80,6 +83,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
       boostTitle: '⚡ Boost unavailable',
       boostBody: "You've already used your free daily Boost (or it's still active). Come back tomorrow or go Premium for unlimited access.",
       boostOn: 'Boost activated for 30 minutes ⚡', boostRunning: 'Boost already active ⚡',
+      undoLast: 'Undo my last swipe',
     }
   };
   const t = T[lang];
@@ -244,11 +248,16 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
         <h3 className="text-xl font-semibold text-gray-800">{t.noMore}</h3>
         <p className="text-gray-500 mt-2">{t.comeback}</p>
         <button
-          onClick={onUndo}
+          onClick={onRefresh}
           className="mt-6 px-6 py-3 rounded-full border-2 border-red-500 text-red-500 font-medium flex items-center gap-2"
         >
-          <i className="fa-solid fa-rotate-left"></i> {t.reload}
+          <i className="fa-solid fa-arrows-rotate"></i> {t.reload}
         </button>
+        {canUndo && (
+          <button onClick={onUndo} className="mt-3 text-sm text-gray-400 underline">
+            {t.undoLast}
+          </button>
+        )}
         {countryFilter && (
           <button onClick={onClearCountryFilter} className="mt-3 text-sm text-gray-400 underline">
             {t.clear} ({countryFilter})
@@ -481,8 +490,11 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
 
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-5 text-white pointer-events-none">
               <div className="flex items-baseline gap-2 flex-wrap">
-                <h2 className="text-2xl font-bold">
+                <h2 className="text-2xl font-bold flex items-center gap-1.5">
                   {currentProfile.name}, {currentProfile.age}
+                  {currentProfile.identityVerified && (
+                    <i className="fa-solid fa-circle-check text-blue-400 text-base" title="Identité vérifiée"></i>
+                  )}
                 </h2>
                 <span className="flex items-center gap-1 text-xs bg-green-500/80 px-2 py-0.5 rounded-full">
                   <i className="fa-solid fa-circle text-[6px]"></i> {t.online}
@@ -523,7 +535,9 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
       <div className="flex justify-center items-center gap-4 py-4 px-4 bg-white">
         <button
           onClick={onUndo}
-          className="w-12 h-12 rounded-full border-2 border-yellow-100 text-yellow-500 flex items-center justify-center shadow-md bg-white active:scale-95 transition-transform"
+          disabled={!canUndo}
+          title={t.undoLast}
+          className={`w-12 h-12 rounded-full border-2 border-yellow-100 text-yellow-500 flex items-center justify-center shadow-md bg-white active:scale-95 transition-transform ${!canUndo ? 'opacity-30' : ''}`}
         >
           <i className="fa-solid fa-rotate-left text-lg"></i>
         </button>

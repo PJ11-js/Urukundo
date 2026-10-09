@@ -15,12 +15,13 @@ interface Props {
   lang?: 'fr' | 'en';
   onReport?: (profile: UserProfile, reason: string) => void;
   onBlock?: (profile: UserProfile) => void;
+  onUnmatch?: (profile: UserProfile) => void;
 }
 
 const REPORT_REASONS_FR = ['Faux profil', 'Contenu inapproprié', 'Harcèlement', 'Autre'];
 const REPORT_REASONS_EN = ['Fake profile', 'Inappropriate content', 'Harassment', 'Other'];
 
-const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lang = 'fr', onReport, onBlock }) => {
+const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lang = 'fr', onReport, onBlock, onUnmatch }) => {
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -29,6 +30,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   const [showMenu, setShowMenu] = useState(false);
   const [showReportReasons, setShowReportReasons] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
+  const [showUnmatchConfirm, setShowUnmatchConfirm] = useState(false);
   const [matchData, setMatchData] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; isMe: boolean } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -52,7 +54,10 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       micDenied: "Micro refusé. Autorise l'accès au micro pour envoyer un message vocal.",
       audioError: "Erreur lors de l'envoi du message vocal.", voiceMessage: '🎤 Message vocal',
       deleteForMe: 'Supprimer pour moi', deleteForEveryone: 'Supprimer pour tout le monde',
-      deletedPlaceholder: 'Message supprimé' },
+      deletedPlaceholder: 'Message supprimé',
+      unmatch: 'Ne plus matcher', unmatchTitle: 'Ne plus matcher avec cette personne ?',
+      unmatchBody: "Vous ne verrez plus cette conversation. Vous pourrez re-matcher si vous vous aimez à nouveau.",
+      unmatchConfirm: 'Ne plus matcher' },
     en: { matched: 'You matched 🎉 Amahoro!', placeholder: 'Type a message...', wingman: 'AI WINGMAN: SUGGEST A REPLY', thinking: 'Thinking...', whatsappPrompt: 'Enter your WhatsApp number:', call: 'Call', report: 'Report', block: 'Block', cancel: 'Cancel', reportTitle: 'Why are you reporting this profile?', blockTitle: 'Block this profile?', blockBody: "This person won't be able to see your profile, or you theirs.", blockConfirm: 'Block',
       shareLocation: 'Share my live location', stopSharing: 'Stop sharing location',
       waitingPartner: (name: string) => `Waiting for ${name} to also enable sharing 📍`,
@@ -60,7 +65,10 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       micDenied: 'Microphone denied. Allow microphone access to send a voice message.',
       audioError: 'Error sending voice message.', voiceMessage: '🎤 Voice message',
       deleteForMe: 'Delete for me', deleteForEveryone: 'Delete for everyone',
-      deletedPlaceholder: 'This message was deleted' }
+      deletedPlaceholder: 'This message was deleted',
+      unmatch: 'Unmatch', unmatchTitle: 'Unmatch with this person?',
+      unmatchBody: "You won't see this conversation anymore. You can match again later if you both like each other.",
+      unmatchConfirm: 'Unmatch' }
   };
   const t = T[lang];
   const reportReasons = lang === 'fr' ? REPORT_REASONS_FR : REPORT_REASONS_EN;
@@ -264,7 +272,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
           className="w-9 h-9 rounded-full bg-green-500 text-white flex items-center justify-center shadow-md">
           <i className="fa-brands fa-whatsapp text-lg"></i>
         </button>
-        {(onReport || onBlock) && (
+        {(onReport || onBlock || onUnmatch) && (
           <div className="relative">
             <button onClick={() => setShowMenu(v => !v)} className="w-9 h-9 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-50">
               <i className="fa-solid fa-ellipsis-vertical"></i>
@@ -282,6 +290,12 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
                     <button onClick={() => { setShowReportReasons(true); setShowMenu(false); }}
                       className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                       <i className="fa-solid fa-flag text-orange-500"></i> {t.report}
+                    </button>
+                  )}
+                  {onUnmatch && (
+                    <button onClick={() => { setShowUnmatchConfirm(true); setShowMenu(false); }}
+                      className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 border-t border-gray-100">
+                      <i className="fa-solid fa-heart-crack text-gray-400"></i> {t.unmatch}
                     </button>
                   )}
                   {onBlock && (
@@ -323,6 +337,19 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
               {t.blockConfirm}
             </button>
             <button onClick={() => setShowBlockConfirm(false)} className="w-full py-2 text-sm text-gray-400">{t.cancel}</button>
+          </div>
+        </div>
+      )}
+
+      {showUnmatchConfirm && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setShowUnmatchConfirm(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center space-y-3" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800">{t.unmatchTitle}</h3>
+            <p className="text-sm text-gray-500">{t.unmatchBody}</p>
+            <button onClick={() => { onUnmatch?.(session.partner); setShowUnmatchConfirm(false); }} className="mt-2 w-full py-3 bg-gray-700 text-white rounded-2xl font-bold">
+              {t.unmatchConfirm}
+            </button>
+            <button onClick={() => setShowUnmatchConfirm(false)} className="w-full py-2 text-sm text-gray-400">{t.cancel}</button>
           </div>
         </div>
       )}

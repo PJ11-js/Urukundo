@@ -37,6 +37,7 @@ const App: React.FC = () => {
   const [needsGenderUpdate, setNeedsGenderUpdate] = useState(false);
   const [theme, setTheme] = useState<Theme>((localStorage.getItem('urukundo_theme') as Theme) || 'light');
   const likesUnsubRef = useRef<(() => void) | null>(null);
+  const [lastSwipe, setLastSwipe] = useState<{ profile: UserProfile; likeDocId?: string; prevSuperLikeAt?: number } | null>(null);
 
   const handleLangSelect = (l: 'fr' | 'en') => {
     setLang(l);
@@ -238,21 +239,29 @@ const App: React.FC = () => {
   const handleSuperLike = (profile: UserProfile) => {
     if (!user || !currentUser) return;
     const now = Date.now();
+    const prevSuperLikeAt = currentUser.lastSuperLikeAt;
     setCurrentUser(prev => prev ? { ...prev, lastSuperLikeAt: now } : prev);
     updateDoc(doc(db, 'users', user.uid), { lastSuperLikeAt: now }).catch(() => {});
 
+    setProfiles(prev => refillProfiles(prev, profile.id));
+    setLastSwipe({ profile, prevSuperLikeAt });
+
     const alreadyMatched = matches.some(m => m.partner.id === profile.id);
     if (!alreadyMatched) {
-      addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp(), type: 'super' }).catch(() => {});
       (async () => {
         try {
+          const ref = await addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp(), type: 'super' });
+          setLastSwipe(prev => prev && prev.profile.id === profile.id ? { ...prev, likeDocId: ref.id } : prev);
           const q = query(collection(db, 'likes'), where('fromUserId', '==', profile.id), where('toUserId', '==', user.uid));
           const snap = await getDocs(q);
-          if (!snap.empty) await createMatch(user.uid, profile);
+          if (!snap.empty) {
+            await createMatch(user.uid, profile);
+            // Un match s'est formé : on ne permet plus d'annuler ce swipe.
+            setLastSwipe(prev => prev && prev.profile.id === profile.id ? null : prev);
+          }
         } catch {}
       })();
     }
-    setProfiles(prev => refillProfiles(prev, profile.id));
   };
 
   const handleBoost = (): boolean => {
@@ -268,24 +277,52 @@ const App: React.FC = () => {
     return true;
   };
 
-  const handleLike = async (profile: UserProfile) => {
-    if (user) {
-      const alreadyMatched = matches.some(m => m.partner.id === profile.id);
-      if (!alreadyMatched) {
-        addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp() }).catch(() => {});
-        try {
-          // Match réel seulement si cette personne t'a déjà liké en retour.
-          const q = query(collection(db, 'likes'), where('fromUserId', '==', profile.id), where('toUserId', '==', user.uid));
-          const snap = await getDocs(q);
-          if (!snap.empty) await createMatch(user.uid, profile);
-        } catch {}
-      }
-    }
+  const handleLike = (profile: UserProfile) => {
     setProfiles(prev => refillProfiles(prev, profile.id));
+    setLastSwipe({ profile });
+    if (!user) return;
+    const alreadyMatched = matches.some(m => m.partner.id === profile.id);
+    if (alreadyMatched) return;
+    (async () => {
+      try {
+        const ref = await addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp() });
+        setLastSwipe(prev => prev && prev.profile.id === profile.id ? { ...prev, likeDocId: ref.id } : prev);
+        // Match réel seulement si cette personne t'a déjà liké en retour.
+        const q = query(collection(db, 'likes'), where('fromUserId', '==', profile.id), where('toUserId', '==', user.uid));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          await createMatch(user.uid, profile);
+          // Un match s'est formé : on ne permet plus d'annuler ce swipe.
+          setLastSwipe(prev => prev && prev.profile.id === profile.id ? null : prev);
+        }
+      } catch {}
+    })();
   };
 
-  const handleDislike = (profileId: string) => setProfiles(prev => prev.filter(p => p.id !== profileId));
-  const handleUndo = () => { if (user) updateUserLocation(user.uid); };
+  const handleDislike = (profileId: string) => {
+    const profile = profiles.find(p => p.id === profileId);
+    if (profile) setLastSwipe({ profile });
+    setProfiles(prev => prev.filter(p => p.id !== profileId));
+  };
+
+  // Annule le dernier swipe (façon "Rewind" de Tinder) : remet le profil en
+  // tête de liste et, si c'était un like/super like, retire le like côté
+  // Firestore pour que l'autre personne ne le voie plus comme "qui t'a aimé".
+  const handleUndo = () => {
+    if (!lastSwipe) return;
+    const { profile, likeDocId, prevSuperLikeAt } = lastSwipe;
+    setProfiles(prev => [profile, ...prev]);
+    if (likeDocId) deleteDoc(doc(db, 'likes', likeDocId)).catch(() => {});
+    if (prevSuperLikeAt !== undefined && user) {
+      setCurrentUser(prev => prev ? { ...prev, lastSuperLikeAt: prevSuperLikeAt } : prev);
+      updateDoc(doc(db, 'users', user.uid), { lastSuperLikeAt: prevSuperLikeAt }).catch(() => {});
+    }
+    setLastSwipe(null);
+  };
+
+  // Recharge la liste depuis le serveur (nouveaux inscrits), distinct du
+  // "annuler le dernier swipe" ci-dessus.
+  const handleRefresh = () => { if (user) updateUserLocation(user.uid); };
 
   const handleBlock = async (profile: UserProfile) => {
     setProfiles(prev => prev.filter(p => p.id !== profile.id));
@@ -296,6 +333,14 @@ const App: React.FC = () => {
       await setDoc(doc(db, 'blocks', `${user.uid}_${profile.id}`), { blockerId: user.uid, blockedId: profile.id, timestamp: serverTimestamp() });
       await deleteDoc(doc(db, 'matches', matchDocId(user.uid, profile.id)));
     } catch {}
+  };
+
+  // Retire le match sans bloquer ni signaler : contrairement à handleBlock,
+  // la personne reste visible en découverte et on peut re-matcher plus tard.
+  const handleUnmatch = async (profile: UserProfile) => {
+    if (currentScreen === AppScreen.CHAT) { setActiveChat(null); setCurrentScreen(AppScreen.MESSAGES); }
+    if (!user) return;
+    try { await deleteDoc(doc(db, 'matches', matchDocId(user.uid, profile.id))); } catch {}
   };
 
   const handleReport = async (profile: UserProfile, reason: string) => {
@@ -363,6 +408,8 @@ const App: React.FC = () => {
             onLike={handleLike}
             onDislike={handleDislike}
             onUndo={handleUndo}
+            canUndo={!!lastSwipe}
+            onRefresh={handleRefresh}
             lang={lang}
             isPremium={!!currentUser?.isPremium}
             countryFilter={countryFilter}
@@ -379,7 +426,7 @@ const App: React.FC = () => {
         {currentScreen === AppScreen.LIKES && user && currentUser && <LikesScreen currentUserId={user.uid} currentUserName={currentUser.name} onMatch={handleMatch} />}
         {currentScreen === AppScreen.MESSAGES && <MessagesScreen matches={matches} onSelectChat={openChat} />}
         {currentScreen === AppScreen.PROFILE && currentUser && <ProfileScreen user={currentUser} setUser={setCurrentUser} onSignOut={() => setShowFeedback(true)} matches={matches} lang={lang} />}
-        {currentScreen === AppScreen.CHAT && activeChat && user && <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} lang={lang} onReport={handleReport} onBlock={handleBlock} />}
+        {currentScreen === AppScreen.CHAT && activeChat && user && <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} lang={lang} onReport={handleReport} onBlock={handleBlock} onUnmatch={handleUnmatch} />}
       </main>
 
       {currentScreen !== AppScreen.CHAT && <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} matches={matches} likesCount={likesCount} />}
