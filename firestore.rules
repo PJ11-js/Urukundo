@@ -16,7 +16,10 @@ service cloud.firestore {
       allow read: if request.auth != null &&
         (request.auth.uid == resource.data.fromUserId || request.auth.uid == resource.data.toUserId);
       allow create: if request.auth != null && request.auth.uid == request.resource.data.fromUserId;
-      allow delete: if request.auth != null && request.auth.uid == resource.data.toUserId;
+      // toUserId supprime en acceptant un match (voir LikesScreen) ; fromUserId
+      // supprime quand il annule son propre swipe ("Rewind").
+      allow delete: if request.auth != null &&
+        (request.auth.uid == resource.data.toUserId || request.auth.uid == resource.data.fromUserId);
     }
 
     // Matchs persistés : seules les deux personnes concernées y accèdent.
