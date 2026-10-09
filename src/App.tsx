@@ -378,7 +378,7 @@ const App: React.FC = () => {
         )}
         {currentScreen === AppScreen.LIKES && user && currentUser && <LikesScreen currentUserId={user.uid} currentUserName={currentUser.name} onMatch={handleMatch} />}
         {currentScreen === AppScreen.MESSAGES && <MessagesScreen matches={matches} onSelectChat={openChat} />}
-        {currentScreen === AppScreen.PROFILE && currentUser && <ProfileScreen user={currentUser} setUser={setCurrentUser} onSignOut={() => setShowFeedback(true)} />}
+        {currentScreen === AppScreen.PROFILE && currentUser && <ProfileScreen user={currentUser} setUser={setCurrentUser} onSignOut={() => setShowFeedback(true)} matches={matches} lang={lang} />}
         {currentScreen === AppScreen.CHAT && activeChat && user && <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} lang={lang} onReport={handleReport} onBlock={handleBlock} />}
       </main>
 

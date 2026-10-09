@@ -78,3 +78,43 @@ export const getConversationStarter = async (
     return fallback;
   }
 };
+
+export interface AssistantMessage {
+  role: 'user' | 'model';
+  text: string;
+}
+
+export const chatWithAssistant = async (
+  history: AssistantMessage[],
+  userMessage: string,
+  matchesContext: string | null,
+  lang: 'fr' | 'en' = 'fr'
+): Promise<string> => {
+  const langInstruction = lang === 'fr' ? 'Réponds toujours en français.' : 'Always reply in English.';
+  const fallback = lang === 'fr'
+    ? "Désolé, je n'arrive pas à répondre pour le moment. Réessaie plus tard."
+    : "Sorry, I can't respond right now. Try again later.";
+  try {
+    if (!apiKey) return fallback;
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+
+    const systemContext = `Tu es l'assistant personnel de l'app de rencontre Urukundo (diaspora burundaise). Tu donnes des conseils de drague, tu aides à formuler des messages, et des conseils de sécurité en rencontre. Sois chaleureux, bienveillant et concis. ${langInstruction}` +
+      (matchesContext
+        ? `\n\nL'utilisateur a autorisé l'accès à ses conversations de matchs pour que tu puisses l'aider plus précisément. Voici un résumé de ses matchs actuels et leur dernier message :\n${matchesContext}`
+        : "\n\nL'utilisateur n'a PAS autorisé l'accès à ses conversations de matchs : donne uniquement des conseils généraux, et si on te demande d'analyser une conversation précise, explique poliment que tu n'y as pas accès tant que ce n'est pas activé dans les réglages.");
+
+    const chat = model.startChat({
+      history: [
+        { role: 'user', parts: [{ text: systemContext }] },
+        { role: 'model', parts: [{ text: lang === 'fr' ? 'Compris, je suis prêt à aider ! 🇧🇮' : 'Got it, ready to help! 🇧🇮' }] },
+        ...history.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+      ],
+    });
+    const result = await chat.sendMessage(userMessage);
+    return result.response.text()?.trim() || fallback;
+  } catch (error) {
+    console.error('Error in assistant chat:', error);
+    return fallback;
+  }
+};

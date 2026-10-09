@@ -27,6 +27,7 @@ export interface UserProfile {
   lastBoostAt?: number;
   boostedUntil?: number;
   fcmTokens?: string[];
+  aiConsent?: boolean;
 }
 
 export interface Message {

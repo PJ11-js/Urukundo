@@ -31,6 +31,11 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid in chatId.split('_') &&
         request.auth.uid == request.resource.data.senderId;
     }
+    // Conversation privée avec l'assistant IA : uniquement son propriétaire.
+    match /aiAssistant/{userId}/messages/{messageId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
     // Blocages : lisible par les deux parties, créé seulement par le bloqueur.
     match /blocks/{blockId} {
       allow read: if request.auth != null &&

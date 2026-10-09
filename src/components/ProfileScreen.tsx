@@ -3,14 +3,17 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { uploadImage, cloudinaryUrl } from '../services/cloudinaryService';
 import { moderateImage } from '../services/geminiService';
-import { UserProfile } from '../types';
+import { UserProfile, ChatSession } from '../types';
 import DiscoverySettingsScreen from './DiscoverySettingsScreen';
 import SafetyScreen from './SafetyScreen';
+import AIAssistantScreen from './AIAssistantScreen';
 
 interface Props {
   user: UserProfile;
   setUser: React.Dispatch<React.SetStateAction<UserProfile | null>>;
   onSignOut: () => void;
+  matches: ChatSession[];
+  lang: 'fr' | 'en';
 }
 
 const PROMPT_QUESTIONS = [
@@ -22,15 +25,28 @@ const PROMPT_QUESTIONS = [
   "Un talent caché",
 ];
 
-const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
+const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lang }) => {
   const [isUploading, setIsUploading] = useState(false);
-  const [subScreen, setSubScreen] = useState<'main' | 'discovery' | 'safety'>('main');
+  const [subScreen, setSubScreen] = useState<'main' | 'discovery' | 'safety' | 'ai'>('main');
   const [activePhoto, setActivePhoto] = useState(0);
   const [showPromptPicker, setShowPromptPicker] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<{ index: number; question: string; answer: string } | null>(null);
 
   if (subScreen === 'discovery') return <DiscoverySettingsScreen user={user} setUser={setUser} onBack={() => setSubScreen('main')} />;
   if (subScreen === 'safety') return <SafetyScreen userId={user.id} onBack={() => setSubScreen('main')} onSignOut={onSignOut} />;
+  if (subScreen === 'ai') return (
+    <AIAssistantScreen
+      userId={user.id}
+      matches={matches}
+      lang={lang}
+      aiConsent={user.aiConsent}
+      onConsentChange={(value) => {
+        updateDoc(doc(db, 'users', user.id), { aiConsent: value }).catch(() => {});
+        setUser(prev => prev ? { ...prev, aiConsent: value } : prev);
+      }}
+      onBack={() => setSubScreen('main')}
+    />
+  );
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -222,6 +238,14 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut }) => {
             <div className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors ${user.isPremium ? 'bg-red-500 justify-end' : 'bg-gray-300 justify-start'}`}>
               <div className="w-5 h-5 bg-white rounded-full shadow"></div>
             </div>
+          </button>
+          <button onClick={() => setSubScreen('ai')}
+            className="w-full p-4 flex justify-between items-center hover:bg-gray-100">
+            <div className="flex items-center gap-3">
+              <i className="fa-solid fa-robot text-indigo-500"></i>
+              <span className="text-sm text-gray-700">Assistant IA</span>
+            </div>
+            <i className="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
           </button>
           <button onClick={() => setSubScreen('discovery')}
             className="w-full p-4 flex justify-between items-center hover:bg-gray-100">
