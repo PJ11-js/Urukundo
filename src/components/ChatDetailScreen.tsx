@@ -389,15 +389,34 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
               </div>
             );
           }
+          if (msg.type === 'audio') {
+            return (
+              <div key={msg.id} className={`flex items-center gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                {isMe && (
+                  <button onClick={() => setDeleteTarget({ id: msg.id, isMe: true })}
+                    className="text-gray-400 hover:text-gray-600 w-6 h-6 flex items-center justify-center flex-shrink-0">
+                    <i className="fa-solid fa-ellipsis-vertical text-sm"></i>
+                  </button>
+                )}
+                <div className={`max-w-[75%] p-2 rounded-2xl ${isMe ? 'bg-red-500 rounded-br-none' : 'bg-white shadow-sm border border-gray-100 rounded-bl-none'}`}>
+                  <audio controls src={msg.audioUrl} style={{ width: 220, height: 32 }} />
+                </div>
+                {!isMe && (
+                  <button onClick={() => setDeleteTarget({ id: msg.id, isMe: false })}
+                    className="text-gray-400 hover:text-gray-600 w-6 h-6 flex items-center justify-center flex-shrink-0">
+                    <i className="fa-solid fa-ellipsis-vertical text-sm"></i>
+                  </button>
+                )}
+              </div>
+            );
+          }
           return (
             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
               <div
                 onMouseDown={() => startPress(msg)} onMouseUp={cancelPress} onMouseLeave={cancelPress}
                 onTouchStart={() => startPress(msg)} onTouchEnd={cancelPress} onTouchCancel={cancelPress}
-                className={`max-w-[75%] ${msg.type === 'audio' ? 'p-2' : 'px-4 py-2.5'} rounded-2xl text-sm select-none ${isMe ? 'bg-red-500 text-white rounded-br-none' : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-bl-none'}`}>
-                {msg.type === 'audio' ? (
-                  <audio controls src={msg.audioUrl} style={{ width: 220, height: 32 }} />
-                ) : msg.text}
+                className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm select-none ${isMe ? 'bg-red-500 text-white rounded-br-none' : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-bl-none'}`}>
+                {msg.text}
               </div>
             </div>
           );
