@@ -33,7 +33,7 @@ export const generateBio = async (interests: string[], name: string): Promise<st
   }
 };
 
-const fileToBase64 = (file: File): Promise<string> =>
+const fileToBase64 = (file: File | Blob): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve((reader.result as string).split(',')[1]);
@@ -41,14 +41,50 @@ const fileToBase64 = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
+// Les photos prises en direct depuis l'appareil (surtout le selfie de
+// vérification, capturé via l'appareil photo natif) peuvent peser plusieurs
+// dizaines de Mo en pleine résolution — assez pour planter un navigateur
+// mobile en mémoire limitée avant même d'atteindre Gemini. On réduit toujours
+// à une taille raisonnable avant de l'encoder en base64 (Gemini n'a de toute
+// façon pas besoin de la pleine résolution pour modérer ou comparer un visage).
+const shrinkImage = (file: File, maxDim = 1024, quality = 0.85): Promise<Blob> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.round(img.naturalWidth * scale);
+      const h = Math.round(img.naturalHeight * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('no 2d context')); return; }
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('toBlob failed')), 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+    img.src = url;
+  });
+
+const fileToSmallBase64 = async (file: File): Promise<{ data: string; mimeType: string }> => {
+  try {
+    const data = await fileToBase64(await shrinkImage(file));
+    return { data, mimeType: 'image/jpeg' };
+  } catch {
+    // au pire, tenter avec le fichier original
+    return { data: await fileToBase64(file), mimeType: file.type || 'image/jpeg' };
+  }
+};
+
 export const moderateImage = async (file: File): Promise<boolean> => {
   try {
     if (!apiKey) return true;
-    const base64 = await fileToBase64(file);
+    const { data, mimeType } = await fileToSmallBase64(file);
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
     const result = await model.generateContent([
-      { inlineData: { data: base64, mimeType: file.type || 'image/jpeg' } },
+      { inlineData: { data, mimeType } },
       { text: 'You are a content moderator for a dating app. You will be shown an image a user wants to use as their profile photo. Reply UNSAFE only if the image clearly contains one of: nudity or sexual content, graphic violence or gore, firearms/weapons as the main subject, or hate symbols. For everything else — including normal photos of people, pets, landscapes, screenshots, memes, or any other everyday image — reply SAFE. Reply with exactly one word: SAFE or UNSAFE, nothing else.' },
     ]);
     const text = (result.response.text() || '').trim().toUpperCase();
@@ -78,15 +114,15 @@ const urlToBase64 = async (url: string): Promise<{ data: string; mimeType: strin
 export const verifyIdentitySelfie = async (selfieFile: File, profilePhotoUrl: string): Promise<boolean> => {
   try {
     if (!apiKey) return false;
-    const [selfieBase64, profile] = await Promise.all([
-      fileToBase64(selfieFile),
+    const [selfie, profile] = await Promise.all([
+      fileToSmallBase64(selfieFile),
       urlToBase64(profilePhotoUrl),
     ]);
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
     const result = await withRetry(() => model.generateContent([
       { inlineData: { data: profile.data, mimeType: profile.mimeType } },
-      { inlineData: { data: selfieBase64, mimeType: selfieFile.type || 'image/jpeg' } },
+      { inlineData: { data: selfie.data, mimeType: selfie.mimeType } },
       { text: 'The first image is a dating app profile photo. The second image is a live selfie just taken by the account holder to verify their identity. Reply MATCH if the two images plausibly show the same person (allow for different lighting, angle, expression, or photo quality/filters). Reply NO_MATCH if they clearly show different people, or if the second image does not clearly show a single human face. Reply with exactly one word: MATCH or NO_MATCH.' },
     ]));
     const text = (result.response.text() || '').trim().toUpperCase();
