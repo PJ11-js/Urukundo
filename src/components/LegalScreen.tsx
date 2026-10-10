@@ -6,7 +6,6 @@ interface Props {
 
 const LegalScreen: React.FC<Props> = ({ onAccept }) => {
   const [tab, setTab] = useState<'cgu' | 'privacy'>('cgu');
-  const [accepted, setAccepted] = useState(false);
 
   return (
     <div className="flex flex-col h-screen bg-white max-w-md mx-auto">
@@ -143,15 +142,11 @@ const LegalScreen: React.FC<Props> = ({ onAccept }) => {
       </div>
 
       <div className="p-6 border-t border-gray-100 space-y-3">
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input type="checkbox" checked={accepted} onChange={e => setAccepted(e.target.checked)}
-            className="mt-1 w-4 h-4 accent-red-500" />
-          <span className="text-sm text-gray-600">
-            J'ai lu et j'accepte les <span className="text-red-500 font-medium">Conditions d'utilisation</span> et la <span className="text-red-500 font-medium">Politique de confidentialité</span> d'Urukundo.
-          </span>
-        </label>
-        <button onClick={onAccept} disabled={!accepted}
-          className="w-full py-4 bg-gradient-to-r from-red-600 to-green-600 text-white rounded-2xl font-bold disabled:opacity-40 active:scale-95 transition-all">
+        <p className="text-xs text-gray-400 text-center">
+          En continuant, tu confirmes avoir lu et accepté les <span className="text-red-500 font-medium">Conditions d'utilisation</span> et la <span className="text-red-500 font-medium">Politique de confidentialité</span> d'Urukundo.
+        </p>
+        <button onClick={onAccept}
+          className="w-full py-4 bg-gradient-to-r from-red-600 to-green-600 text-white rounded-2xl font-bold active:scale-95 transition-all">
           Continuer 🇧🇮
         </button>
       </div>

@@ -47,7 +47,7 @@ const fileToBase64 = (file: File | Blob): Promise<string> =>
 // mobile en mémoire limitée avant même d'atteindre Gemini. On réduit toujours
 // à une taille raisonnable avant de l'encoder en base64 (Gemini n'a de toute
 // façon pas besoin de la pleine résolution pour modérer ou comparer un visage).
-const shrinkImage = (file: File, maxDim = 1024, quality = 0.85): Promise<Blob> =>
+const shrinkImage = (file: File | Blob, maxDim = 1024, quality = 0.85): Promise<Blob> =>
   new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -67,7 +67,7 @@ const shrinkImage = (file: File, maxDim = 1024, quality = 0.85): Promise<Blob> =
     img.src = url;
   });
 
-const fileToSmallBase64 = async (file: File): Promise<{ data: string; mimeType: string }> => {
+const fileToSmallBase64 = async (file: File | Blob): Promise<{ data: string; mimeType: string }> => {
   try {
     const data = await fileToBase64(await shrinkImage(file));
     return { data, mimeType: 'image/jpeg' };
@@ -111,7 +111,7 @@ const urlToBase64 = async (url: string): Promise<{ data: string; mimeType: strin
 // profil existante. Sans clé API on ne peut pas vérifier honnêtement, donc
 // on refuse le badge plutôt que de l'accorder par défaut (contraire à
 // moderateImage, qui fail-open par prudence sur un blocage non voulu).
-export const verifyIdentitySelfie = async (selfieFile: File, profilePhotoUrl: string): Promise<boolean> => {
+export const verifyIdentitySelfie = async (selfieFile: File | Blob, profilePhotoUrl: string): Promise<boolean> => {
   try {
     if (!apiKey) return false;
     const [selfie, profile] = await Promise.all([

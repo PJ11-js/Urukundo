@@ -7,6 +7,7 @@ import { UserProfile, ChatSession } from '../types';
 import DiscoverySettingsScreen from './DiscoverySettingsScreen';
 import SafetyScreen from './SafetyScreen';
 import AIAssistantScreen from './AIAssistantScreen';
+import SelfieCaptureScreen from './SelfieCaptureScreen';
 
 interface Props {
   user: UserProfile;
@@ -28,6 +29,7 @@ const PROMPT_QUESTIONS = [
 const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lang }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [showSelfieCam, setShowSelfieCam] = useState(false);
   const [subScreen, setSubScreen] = useState<'main' | 'discovery' | 'safety' | 'ai'>('main');
   const [activePhoto, setActivePhoto] = useState(0);
   const [showPromptPicker, setShowPromptPicker] = useState(false);
@@ -106,13 +108,12 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
     try { await updateDoc(doc(db, 'users', user.id), { prompts }); } catch {}
   };
 
-  const handleSelfieCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !user.images[0]) return;
+  const handleSelfieCapture = async (blob: Blob) => {
+    setShowSelfieCam(false);
+    if (!user.images[0]) return;
     setIsVerifying(true);
     try {
-      const match = await verifyIdentitySelfie(file, cloudinaryUrl(user.images[0], 500, 500));
+      const match = await verifyIdentitySelfie(blob, cloudinaryUrl(user.images[0], 500, 500));
       if (match) {
         await updateDoc(doc(db, 'users', user.id), { identityVerified: true });
         setUser(prev => prev ? { ...prev, identityVerified: true } : null);
@@ -256,7 +257,8 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
               <span className="text-sm font-medium">Identité vérifiée</span>
             </div>
           ) : (
-            <label className="w-full p-4 flex justify-between items-center hover:bg-gray-100 cursor-pointer">
+            <button type="button" disabled={isVerifying || !user.images[0]} onClick={() => setShowSelfieCam(true)}
+              className="w-full p-4 flex justify-between items-center hover:bg-gray-100 disabled:cursor-default">
               <div className="flex items-center gap-3">
                 <i className={`fa-solid ${isVerifying ? 'fa-spinner fa-spin' : 'fa-id-badge'} text-blue-500`}></i>
                 <span className="text-sm text-gray-700">
@@ -264,8 +266,10 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
                 </span>
               </div>
               {!isVerifying && !user.images[0] && <span className="text-[10px] text-gray-400">Ajoute une photo d'abord</span>}
-              <input type="file" accept="image/*" capture="user" className="hidden" disabled={isVerifying || !user.images[0]} onChange={handleSelfieCapture} />
-            </label>
+            </button>
+          )}
+          {showSelfieCam && (
+            <SelfieCaptureScreen lang={lang} onCapture={handleSelfieCapture} onCancel={() => setShowSelfieCam(false)} />
           )}
           <button onClick={handleTogglePremium}
             className="w-full p-4 flex justify-between items-center hover:bg-gray-100">
