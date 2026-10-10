@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { signInWithPopup, getRedirectResult } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase';
+import { auth, googleProvider, facebookProvider } from '../firebase';
 
 interface Props {
   onLangSelect: (lang: 'fr' | 'en') => void;
@@ -8,12 +8,12 @@ interface Props {
 }
 
 const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
-  const [loading, setLoading] = useState(false);
+  const [loadingProvider, setLoadingProvider] = useState<'google' | 'facebook' | null>(null);
   const [error, setError] = useState('');
 
   const T = {
-    fr: { title: 'L\'application de rencontre pour les Burundais du monde entier', community: 'Rejoins la communauté Urukundo', google: 'Continuer avec Google', connecting: 'Connexion...', error: 'Erreur de connexion. Ouvre ce site dans ton navigateur (Safari/Chrome) et réessaie.', diaspora: 'Diaspora', meetings: 'Rencontres', chat: 'Chat', browserTip: '💡 Pour une meilleure expérience, ouvre ce lien dans Safari ou Chrome' },
-    en: { title: 'The dating app for Burundians around the world', community: 'Join the Urukundo community', google: 'Continue with Google', connecting: 'Connecting...', error: 'Connection error. Open this site in your browser (Safari/Chrome) and try again.', diaspora: 'Diaspora', meetings: 'Dating', chat: 'Chat', browserTip: '💡 For a better experience, open this link in Safari or Chrome' }
+    fr: { title: 'L\'application de rencontre pour les Burundais du monde entier', community: 'Rejoins la communauté Urukundo', google: 'Continuer avec Google', facebook: 'Continuer avec Facebook', connecting: 'Connexion...', error: 'Erreur de connexion. Ouvre ce site dans ton navigateur (Safari/Chrome) et réessaie.', diaspora: 'Diaspora', meetings: 'Rencontres', chat: 'Chat', browserTip: '💡 Pour une meilleure expérience, ouvre ce lien dans Safari ou Chrome' },
+    en: { title: 'The dating app for Burundians around the world', community: 'Join the Urukundo community', google: 'Continue with Google', facebook: 'Continue with Facebook', connecting: 'Connecting...', error: 'Connection error. Open this site in your browser (Safari/Chrome) and try again.', diaspora: 'Diaspora', meetings: 'Dating', chat: 'Chat', browserTip: '💡 For a better experience, open this link in Safari or Chrome' }
   };
   const t = T[lang];
 
@@ -32,19 +32,31 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
       window.open(window.location.href, '_blank');
       return;
     }
-    setLoading(true);
+    setLoadingProvider('google');
     setError('');
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
-        setError(t.error);
-      } else {
-        setError(t.error);
-      }
+      setError(t.error);
     }
-    setLoading(false);
+    setLoadingProvider(null);
+  };
+
+  const handleFacebookLogin = async () => {
+    if (isWebView) {
+      window.open(window.location.href, '_blank');
+      return;
+    }
+    setLoadingProvider('facebook');
+    setError('');
+    try {
+      await signInWithPopup(auth, facebookProvider);
+    } catch (err: any) {
+      console.error(err);
+      setError(t.error);
+    }
+    setLoadingProvider(null);
   };
 
   return (
@@ -84,9 +96,9 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
 
         {error && <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl text-center">{error}</div>}
 
-        <button onClick={handleGoogleLogin} disabled={loading}
+        <button onClick={handleGoogleLogin} disabled={loadingProvider !== null}
           className="w-full py-4 px-6 bg-white border-2 border-gray-200 rounded-2xl flex items-center justify-center gap-3 font-semibold text-gray-700 hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-50 shadow-sm">
-          {loading ? (
+          {loadingProvider === 'google' ? (
             <i className="fa-solid fa-spinner fa-spin text-gray-400"></i>
           ) : (
             <svg width="20" height="20" viewBox="0 0 24 24">
@@ -96,7 +108,17 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
             </svg>
           )}
-          {loading ? t.connecting : t.google}
+          {loadingProvider === 'google' ? t.connecting : t.google}
+        </button>
+
+        <button onClick={handleFacebookLogin} disabled={loadingProvider !== null}
+          className="w-full py-4 px-6 bg-[#1877F2] rounded-2xl flex items-center justify-center gap-3 font-semibold text-white hover:bg-[#166FE5] transition-all active:scale-95 disabled:opacity-50 shadow-sm">
+          {loadingProvider === 'facebook' ? (
+            <i className="fa-solid fa-spinner fa-spin text-white"></i>
+          ) : (
+            <i className="fa-brands fa-facebook text-xl"></i>
+          )}
+          {loadingProvider === 'facebook' ? t.connecting : t.facebook}
         </button>
 
         {(isIOS || isWebView) && (
