@@ -113,12 +113,14 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
     if (!user.images[0]) return;
     setIsVerifying(true);
     try {
-      const match = await verifyIdentitySelfie(blob, cloudinaryUrl(user.images[0], 500, 500));
-      if (match) {
+      const result = await verifyIdentitySelfie(blob, cloudinaryUrl(user.images[0], 500, 500));
+      if (result === 'match') {
         await updateDoc(doc(db, 'users', user.id), { identityVerified: true });
         setUser(prev => prev ? { ...prev, identityVerified: true } : null);
-      } else {
+      } else if (result === 'no_match') {
         alert("On n'a pas réussi à confirmer qu'il s'agit bien de toi. Réessaie avec un selfie net, en pleine lumière, visage dégagé.");
+      } else {
+        alert("Erreur technique pendant la vérification (réseau ou service indisponible). Réessaie dans quelques instants.");
       }
     } catch { alert('Erreur lors de la vérification.'); }
     setIsVerifying(false);
