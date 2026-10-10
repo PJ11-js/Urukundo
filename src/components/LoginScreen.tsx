@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { signInWithPopup, getRedirectResult } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { auth, googleProvider, facebookProvider } from '../firebase';
 
 interface Props {
@@ -20,6 +20,9 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
   // Vérifie si on est dans une webview Instagram/Facebook
   const isWebView = /Instagram|FBAN|FBAV|Twitter|Line\//.test(navigator.userAgent);
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  // App installée (PWA) : signInWithPopup ne marche pas de façon fiable dans ce contexte,
+  // la popup ne peut pas renvoyer le résultat à la fenêtre parente -> on utilise le redirect à la place.
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
 
   useEffect(() => {
     // Récupère le résultat du redirect si on revient d'une auth Google
@@ -35,6 +38,10 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
     setLoadingProvider('google');
     setError('');
     try {
+      if (isStandalone) {
+        await signInWithRedirect(auth, googleProvider);
+        return;
+      }
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.error(err);
@@ -51,6 +58,10 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
     setLoadingProvider('facebook');
     setError('');
     try {
+      if (isStandalone) {
+        await signInWithRedirect(auth, facebookProvider);
+        return;
+      }
       await signInWithPopup(auth, facebookProvider);
     } catch (err: any) {
       console.error(err);
