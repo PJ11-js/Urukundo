@@ -124,6 +124,10 @@ const App: React.FC = () => {
         if (data.id === userId) return;
         if (data.hidden) return;
         if (blockedIds.has(data.id)) return;
+        // Inscription jamais terminée (compte créé côté Auth mais le setup du profil a été
+        // abandonné avant la fin) : le doc existe mais sans nom -> on ne peut pas l'afficher
+        // dans la découverte, ça fait planter la carte (`currentProfile.name[0]`).
+        if (!data.name) return;
         let distance: number | undefined;
         if (coords && data.lat && data.lng) distance = calculateDistance(coords.lat, coords.lng, data.lat, data.lng);
         realUsers.push({ ...data, interests: data.interests || [], images: data.images || [], distance });
