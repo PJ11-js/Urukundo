@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { signInWithPopup, getRedirectResult } from 'firebase/auth';
 import { auth, googleProvider, facebookProvider } from '../firebase';
 
 interface Props {
@@ -20,15 +20,12 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
   // Vérifie si on est dans une webview Instagram/Facebook
   const isWebView = /Instagram|FBAN|FBAV|Twitter|Line\//.test(navigator.userAgent);
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  // App installée (PWA) : signInWithPopup ne marche pas de façon fiable dans ce contexte,
-  // la popup ne peut pas renvoyer le résultat à la fenêtre parente -> on utilise le redirect à la place.
+  // App installée sur l'écran d'accueil (PWA), iOS ou Android : ni signInWithPopup ni
+  // signInWithRedirect ne ramènent le résultat de façon fiable dans ce contexte (testé sur les
+  // deux plateformes) - l'app perd le fil pendant l'aller-retour vers Google/Facebook et revient
+  // simplement à l'écran de connexion, sans erreur. Seule solution fiable : ouvrir le vrai
+  // navigateur (même mécanisme que pour les webviews Instagram/Facebook ci-dessous).
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
-  // Sur iOS, le redirect échoue aussi dans le contexte standalone : Safari/WebKit isole le
-  // stockage de l'app installée pendant l'aller-retour vers Google/Facebook, donc
-  // getRedirectResult revient bredouille (pas d'erreur, juste "pas de résultat") -> on revient
-  // sur cet écran sans explication. La seule solution fiable est d'ouvrir le vrai Safari
-  // (même mécanisme que pour les webviews Instagram/Facebook ci-dessous).
-  const isIOSStandalone = isStandalone && isIOS;
 
   useEffect(() => {
     // Récupère le résultat du redirect si on revient d'une auth Google/Facebook.
@@ -41,18 +38,14 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
   }, []);
 
   const handleGoogleLogin = async () => {
-    if (isWebView || isIOSStandalone) {
-      // Dans une webview ou l'app installée sur iOS, ouvre dans Safari directement
+    if (isWebView || isStandalone) {
+      // Dans une webview ou l'app installée, ouvre dans le navigateur directement
       window.open(window.location.href, '_blank');
       return;
     }
     setLoadingProvider('google');
     setError('');
     try {
-      if (isStandalone) {
-        await signInWithRedirect(auth, googleProvider);
-        return;
-      }
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.error(err);
@@ -62,17 +55,13 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
   };
 
   const handleFacebookLogin = async () => {
-    if (isWebView || isIOSStandalone) {
+    if (isWebView || isStandalone) {
       window.open(window.location.href, '_blank');
       return;
     }
     setLoadingProvider('facebook');
     setError('');
     try {
-      if (isStandalone) {
-        await signInWithRedirect(auth, facebookProvider);
-        return;
-      }
       await signInWithPopup(auth, facebookProvider);
     } catch (err: any) {
       console.error(err);
@@ -109,7 +98,7 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
       <div className="p-8 space-y-4 bg-white">
         <h2 className="text-xl font-bold text-gray-800 text-center mb-6">{t.community}</h2>
 
-        {(isWebView || isIOSStandalone) && (
+        {(isWebView || isStandalone) && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 text-center">
             <p className="text-sm text-yellow-700 font-medium">{t.browserTip}</p>
             <p className="text-xs text-yellow-600 mt-1">urukundo-2qq5.vercel.app</p>
