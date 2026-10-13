@@ -25,8 +25,13 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
 
   useEffect(() => {
-    // Récupère le résultat du redirect si on revient d'une auth Google
-    getRedirectResult(auth).catch(() => {});
+    // Récupère le résultat du redirect si on revient d'une auth Google/Facebook.
+    // On affiche l'erreur réelle au lieu de l'avaler silencieusement : sans ça,
+    // un échec de redirect renvoie juste à cet écran sans aucune explication.
+    getRedirectResult(auth).catch((err: any) => {
+      console.error('getRedirectResult error', err);
+      setError(`${t.error} (${err?.code || 'erreur inconnue'})`);
+    });
   }, []);
 
   const handleGoogleLogin = async () => {
@@ -45,7 +50,7 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.error(err);
-      setError(t.error);
+      setError(`${t.error} (${err?.code || 'erreur inconnue'})`);
     }
     setLoadingProvider(null);
   };
@@ -65,7 +70,7 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
       await signInWithPopup(auth, facebookProvider);
     } catch (err: any) {
       console.error(err);
-      setError(t.error);
+      setError(`${t.error} (${err?.code || 'erreur inconnue'})`);
     }
     setLoadingProvider(null);
   };
