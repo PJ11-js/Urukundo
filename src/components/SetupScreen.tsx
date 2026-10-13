@@ -93,7 +93,11 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
         }
         setLocationLoading(false);
       },
-      () => { setLocationLoading(false); setLocationError(t.locationError); },
+      (err: GeolocationPositionError) => {
+        setLocationLoading(false);
+        const codeText = err.code === 1 ? 'PERMISSION_DENIED' : err.code === 2 ? 'POSITION_UNAVAILABLE' : err.code === 3 ? 'TIMEOUT' : 'UNKNOWN';
+        setLocationError(`${t.locationError} (${codeText})`);
+      },
       { timeout: 15000, maximumAge: 0, enableHighAccuracy: true }
     );
   };
