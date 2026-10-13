@@ -23,6 +23,12 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
   // App installée (PWA) : signInWithPopup ne marche pas de façon fiable dans ce contexte,
   // la popup ne peut pas renvoyer le résultat à la fenêtre parente -> on utilise le redirect à la place.
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+  // Sur iOS, le redirect échoue aussi dans le contexte standalone : Safari/WebKit isole le
+  // stockage de l'app installée pendant l'aller-retour vers Google/Facebook, donc
+  // getRedirectResult revient bredouille (pas d'erreur, juste "pas de résultat") -> on revient
+  // sur cet écran sans explication. La seule solution fiable est d'ouvrir le vrai Safari
+  // (même mécanisme que pour les webviews Instagram/Facebook ci-dessous).
+  const isIOSStandalone = isStandalone && isIOS;
 
   useEffect(() => {
     // Récupère le résultat du redirect si on revient d'une auth Google/Facebook.
@@ -35,8 +41,8 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
   }, []);
 
   const handleGoogleLogin = async () => {
-    if (isWebView) {
-      // Dans une webview, ouvre dans le navigateur externe
+    if (isWebView || isIOSStandalone) {
+      // Dans une webview ou l'app installée sur iOS, ouvre dans Safari directement
       window.open(window.location.href, '_blank');
       return;
     }
@@ -56,7 +62,7 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
   };
 
   const handleFacebookLogin = async () => {
-    if (isWebView) {
+    if (isWebView || isIOSStandalone) {
       window.open(window.location.href, '_blank');
       return;
     }
@@ -103,7 +109,7 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
       <div className="p-8 space-y-4 bg-white">
         <h2 className="text-xl font-bold text-gray-800 text-center mb-6">{t.community}</h2>
 
-        {isWebView && (
+        {(isWebView || isIOSStandalone) && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 text-center">
             <p className="text-sm text-yellow-700 font-medium">{t.browserTip}</p>
             <p className="text-xs text-yellow-600 mt-1">urukundo-2qq5.vercel.app</p>
