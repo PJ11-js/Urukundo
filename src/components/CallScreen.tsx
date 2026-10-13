@@ -170,7 +170,7 @@ const CallScreen: React.FC<Props> = ({ callId, currentUserId, partner, type, rol
             <img src={cloudinaryUrl(partner.images[0], 300, 300)} className="w-32 h-32 rounded-full object-cover shadow-xl" alt={partner.name} />
           ) : (
             <div className="w-32 h-32 rounded-full bg-gradient-to-br from-red-400 to-green-400 flex items-center justify-center text-4xl font-bold">
-              {partner.name[0]}
+              {partner.name?.[0] || '?'}
             </div>
           )}
           <h2 className="text-2xl font-bold">{partner.name}</h2>

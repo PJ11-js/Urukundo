@@ -443,7 +443,7 @@ const App: React.FC = () => {
             <img src={cloudinaryUrl(incomingCall.callerProfile.images[0], 300, 300)} className="w-32 h-32 rounded-full object-cover shadow-xl" alt={incomingCall.callerProfile.name} />
           ) : (
             <div className="w-32 h-32 rounded-full bg-gradient-to-br from-red-400 to-green-400 flex items-center justify-center text-4xl font-bold">
-              {incomingCall.callerProfile.name[0]}
+              {incomingCall.callerProfile.name?.[0] || '?'}
             </div>
           )}
           <h2 className="text-2xl font-bold">{incomingCall.callerProfile.name}</h2>

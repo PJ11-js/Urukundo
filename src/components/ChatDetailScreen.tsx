@@ -299,7 +299,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
           <img src={cloudinaryUrl(session.partner.images[0], 80, 80)} className="w-10 h-10 rounded-full object-cover" alt={session.partner.name} />
         ) : (
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-200 to-green-200 flex items-center justify-center">
-            <span className="text-white font-bold">{session.partner.name[0]}</span>
+            <span className="text-white font-bold">{session.partner.name?.[0] || '?'}</span>
           </div>
         )}
         <div className="flex-1">
