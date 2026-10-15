@@ -420,7 +420,7 @@ const App: React.FC = () => {
 
   if (authLoading) {
     content = (
-      <div className="flex items-center justify-center h-screen bg-white">
+      <div className="flex items-center justify-center h-full bg-white">
         <div className="text-center"><div className="text-4xl mb-3">🇧🇮</div><div className="text-red-500 font-bold text-xl">URUKUNDO</div><div className="text-gray-400 text-sm mt-2">{lang === 'fr' ? 'Chargement...' : 'Loading...'}</div></div>
       </div>
     );
@@ -432,7 +432,7 @@ const App: React.FC = () => {
     content = <SetupScreen userId={user.uid} displayName={user.displayName || ''} photoURL={user.photoURL || ''} onComplete={handleProfileSetupComplete} lang={lang} />;
   } else {
     content = (
-    <div className="flex flex-col h-screen max-w-md mx-auto bg-white shadow-2xl relative overflow-hidden border-x border-gray-100">
+    <div className="flex flex-col h-full max-w-md mx-auto bg-white shadow-2xl relative overflow-hidden border-x border-gray-100">
       {showFeedback && user && (
         <FeedbackScreen userId={user.uid} lang={lang} onConfirm={handleSignOut} onCancel={() => setShowFeedback(false)} />
       )}

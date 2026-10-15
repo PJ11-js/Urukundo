@@ -71,7 +71,7 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className="flex flex-col h-full bg-white">
       <div className="flex justify-end p-4 gap-2">
         <button onClick={() => onLangSelect('fr')}
           className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${lang === 'fr' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600'}`}>

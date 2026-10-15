@@ -22,7 +22,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center h-screen bg-white text-center p-10">
+        <div className="flex flex-col items-center justify-center h-full bg-white text-center p-10">
           <div className="text-4xl mb-3">🇧🇮</div>
           <h2 className="text-xl font-bold text-gray-800">Oups, une erreur est survenue</h2>
           <p className="text-gray-500 mt-2 text-sm">Réessaie, ou recharge l'application.</p>

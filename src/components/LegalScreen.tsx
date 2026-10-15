@@ -8,7 +8,7 @@ const LegalScreen: React.FC<Props> = ({ onAccept }) => {
   const [tab, setTab] = useState<'cgu' | 'privacy'>('cgu');
 
   return (
-    <div className="flex flex-col h-screen bg-white max-w-md mx-auto">
+    <div className="flex flex-col h-full bg-white max-w-md mx-auto">
       <div className="px-6 py-4 border-b border-gray-100 text-center">
         <div className="text-3xl mb-1">🇧🇮</div>
         <h1 className="text-xl font-black text-red-600">URUKUNDO</h1>

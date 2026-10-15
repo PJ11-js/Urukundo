@@ -165,7 +165,7 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white max-w-md mx-auto">
+    <div className="flex flex-col h-full bg-white max-w-md mx-auto">
       <div className="px-6 py-4 border-b border-gray-100">
         <div className="flex gap-2 mb-2">
           {[1, 2, 3].map(s => (
