@@ -23,8 +23,8 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
   const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
 
   const T = {
-    fr: { title: 'L\'application de rencontre pour les Burundais du monde entier', community: 'Rejoins la communauté Urukundo', google: 'Continuer avec Google', or: 'ou', email: 'E-mail', password: 'Mot de passe', login: 'Se connecter', signup: 'Créer mon compte', toSignup: 'Pas encore de compte ? Crée-le ici', toLogin: 'Déjà un compte ? Connecte-toi', forgot: 'Mot de passe oublié ?', resetSent: 'E-mail envoyé ! Regarde ta boîte mail (et les spams) pour choisir un nouveau mot de passe.', needEmail: 'Écris d\'abord ton adresse e-mail.', errInvalidEmail: 'Adresse e-mail invalide.', errWeak: 'Le mot de passe doit avoir au moins 6 caractères.', errInUse: 'Un compte existe déjà avec cet e-mail. Connecte-toi.', errWrong: 'E-mail ou mot de passe incorrect.', errTooMany: 'Trop d\'essais. Attends quelques minutes et réessaie.', errEmail: 'Erreur. Réessaie dans un moment.', phoneBtn: 'Continuer avec mon téléphone', phoneLabel: 'Ton numéro avec l\'indicatif du pays (+257 pour le Burundi)', sendCode: 'Recevoir le code par SMS', codeSent: 'Code envoyé au', codeLabel: 'Code à 6 chiffres', verify: 'Valider', changeNumber: 'Changer de numéro', back: '← Autres moyens de connexion', errPhone: 'Numéro invalide. Vérifie l\'indicatif (ex : +257 79 12 34 56).', errCode: 'Code incorrect. Vérifie le SMS et réessaie.', errCodeExpired: 'Code expiré. Demande un nouveau code.', errQuota: 'Trop de SMS envoyés aujourd\'hui. Utilise ton e-mail ou Google, ou réessaie demain.', errSmsRegion: 'Les SMS ne sont pas disponibles pour ce pays. Utilise ton e-mail ou Google.', connecting: 'Connexion...', error: 'Erreur de connexion. Ouvre ce site dans ton navigateur (Safari/Chrome) et réessaie.', diaspora: 'Diaspora', meetings: 'Rencontres', chat: 'Chat', browserTip: '💡 Pour une meilleure expérience, ouvre ce lien dans Safari ou Chrome' },
-    en: { title: 'The dating app for Burundians around the world', community: 'Join the Urukundo community', google: 'Continue with Google', or: 'or', email: 'Email', password: 'Password', login: 'Log in', signup: 'Create my account', toSignup: 'No account yet? Create one here', toLogin: 'Already have an account? Log in', forgot: 'Forgot password?', resetSent: 'Email sent! Check your inbox (and spam) to choose a new password.', needEmail: 'Enter your email address first.', errInvalidEmail: 'Invalid email address.', errWeak: 'Password must be at least 6 characters.', errInUse: 'An account already exists with this email. Log in.', errWrong: 'Wrong email or password.', errTooMany: 'Too many attempts. Wait a few minutes and try again.', errEmail: 'Error. Try again in a moment.', phoneBtn: 'Continue with my phone', phoneLabel: 'Your number with country code (+257 for Burundi)', sendCode: 'Get the code by SMS', codeSent: 'Code sent to', codeLabel: '6-digit code', verify: 'Confirm', changeNumber: 'Change number', back: '← Other ways to log in', errPhone: 'Invalid number. Check the country code (e.g. +257 79 12 34 56).', errCode: 'Wrong code. Check the SMS and try again.', errCodeExpired: 'Code expired. Request a new one.', errQuota: 'Too many SMS sent today. Use your email or Google, or try again tomorrow.', errSmsRegion: 'SMS is not available for this country. Use your email or Google.', connecting: 'Connecting...', error: 'Connection error. Open this site in your browser (Safari/Chrome) and try again.', diaspora: 'Diaspora', meetings: 'Dating', chat: 'Chat', browserTip: '💡 For a better experience, open this link in Safari or Chrome' }
+    fr: { title: 'L\'application de rencontre pour les Burundais du monde entier', community: 'Rejoins la communauté Urukundo', google: 'Continuer avec Google', or: 'ou', email: 'E-mail', password: 'Mot de passe', login: 'Se connecter', signup: 'Créer mon compte', toSignup: 'Pas encore de compte ? Crée-le ici', toLogin: 'Déjà un compte ? Connecte-toi', forgot: 'Mot de passe oublié ?', forgotCta: 'Recevoir un e-mail pour changer mon mot de passe', resetSent: 'E-mail envoyé ! Regarde ta boîte mail (et les spams) pour choisir un nouveau mot de passe.', needEmail: 'Écris d\'abord ton adresse e-mail.', errInvalidEmail: 'Adresse e-mail invalide.', errWeak: 'Le mot de passe doit avoir au moins 6 caractères.', errInUse: 'Un compte existe déjà avec cet e-mail. Connecte-toi.', errWrong: 'E-mail ou mot de passe incorrect.', errTooMany: 'Trop d\'essais. Attends quelques minutes et réessaie.', errEmail: 'Erreur. Réessaie dans un moment.', phoneBtn: 'Continuer avec mon téléphone', phoneLabel: 'Ton numéro avec l\'indicatif du pays (+257 pour le Burundi)', sendCode: 'Recevoir le code par SMS', codeSent: 'Code envoyé au', codeLabel: 'Code à 6 chiffres', verify: 'Valider', changeNumber: 'Changer de numéro', back: '← Autres moyens de connexion', errPhone: 'Numéro invalide. Vérifie l\'indicatif (ex : +257 79 12 34 56).', errCode: 'Code incorrect. Vérifie le SMS et réessaie.', errCodeExpired: 'Code expiré. Demande un nouveau code.', errQuota: 'Trop de SMS envoyés aujourd\'hui. Utilise ton e-mail ou Google, ou réessaie demain.', errSmsRegion: 'Les SMS ne sont pas disponibles pour ce pays. Utilise ton e-mail ou Google.', connecting: 'Connexion...', error: 'Erreur de connexion. Ouvre ce site dans ton navigateur (Safari/Chrome) et réessaie.', diaspora: 'Diaspora', meetings: 'Rencontres', chat: 'Chat', browserTip: '💡 Pour une meilleure expérience, ouvre ce lien dans Safari ou Chrome' },
+    en: { title: 'The dating app for Burundians around the world', community: 'Join the Urukundo community', google: 'Continue with Google', or: 'or', email: 'Email', password: 'Password', login: 'Log in', signup: 'Create my account', toSignup: 'No account yet? Create one here', toLogin: 'Already have an account? Log in', forgot: 'Forgot password?', forgotCta: 'Email me a link to reset my password', resetSent: 'Email sent! Check your inbox (and spam) to choose a new password.', needEmail: 'Enter your email address first.', errInvalidEmail: 'Invalid email address.', errWeak: 'Password must be at least 6 characters.', errInUse: 'An account already exists with this email. Log in.', errWrong: 'Wrong email or password.', errTooMany: 'Too many attempts. Wait a few minutes and try again.', errEmail: 'Error. Try again in a moment.', phoneBtn: 'Continue with my phone', phoneLabel: 'Your number with country code (+257 for Burundi)', sendCode: 'Get the code by SMS', codeSent: 'Code sent to', codeLabel: '6-digit code', verify: 'Confirm', changeNumber: 'Change number', back: '← Other ways to log in', errPhone: 'Invalid number. Check the country code (e.g. +257 79 12 34 56).', errCode: 'Wrong code. Check the SMS and try again.', errCodeExpired: 'Code expired. Request a new one.', errQuota: 'Too many SMS sent today. Use your email or Google, or try again tomorrow.', errSmsRegion: 'SMS is not available for this country. Use your email or Google.', connecting: 'Connecting...', error: 'Connection error. Open this site in your browser (Safari/Chrome) and try again.', diaspora: 'Diaspora', meetings: 'Dating', chat: 'Chat', browserTip: '💡 For a better experience, open this link in Safari or Chrome' }
   };
   const t = T[lang];
 
@@ -205,7 +205,14 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
           </div>
         )}
 
-        {error && <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl text-center">{error}</div>}
+        {error && (
+          <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl text-center">
+            {error}
+            {error === t.errWrong && (
+              <button type="button" onClick={handleForgotPassword} className="block w-full mt-2 font-semibold underline">{t.forgotCta}</button>
+            )}
+          </div>
+        )}
 
         <div id="recaptcha-container"></div>
 
@@ -278,6 +285,11 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}
             autoComplete={emailMode === 'signup' ? 'new-password' : 'current-password'} placeholder={t.password}
             className="w-full py-3.5 px-5 border-2 border-gray-200 rounded-2xl text-gray-800 focus:border-red-400 focus:outline-none" />
+          {emailMode === 'login' && (
+            <div className="text-right -mt-1">
+              <button type="button" onClick={handleForgotPassword} className="text-sm font-semibold text-red-500 px-1">{t.forgot}</button>
+            </div>
+          )}
           <button type="submit" disabled={loadingProvider !== null}
             className="w-full py-4 px-6 bg-red-500 rounded-2xl flex items-center justify-center gap-3 font-semibold text-white hover:bg-red-600 transition-all active:scale-95 disabled:opacity-50 shadow-sm">
             {loadingProvider === 'email' ? (
@@ -294,9 +306,6 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
             className="text-red-500 font-semibold">
             {emailMode === 'login' ? t.toSignup : t.toLogin}
           </button>
-          {emailMode === 'login' && (
-            <button onClick={handleForgotPassword} className="text-gray-500">{t.forgot}</button>
-          )}
         </div>
         </>)}
 

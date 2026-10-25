@@ -158,7 +158,7 @@ const CallScreen: React.FC<Props> = ({ callId, currentUserId, partner, type, rol
   const statusLabel = status === 'failed' ? t.failed : status === 'in-call' ? formatDuration(duration) : role === 'caller' ? t.calling : t.connecting;
 
   return (
-    <div className="absolute inset-0 z-50 bg-gray-900 flex flex-col text-white" style={{ height: '100dvh' }}>
+    <div className="absolute inset-0 z-[80] bg-gray-900 flex flex-col text-white" style={{ height: '100dvh' }}>
       {type === 'video' && (
         <video ref={remoteVideoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover bg-black" />
       )}

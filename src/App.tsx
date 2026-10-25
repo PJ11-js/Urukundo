@@ -454,7 +454,7 @@ const App: React.FC = () => {
       )}
 
       {incomingCall && !activeCall && (
-        <div className="absolute inset-0 z-50 bg-gray-900/95 flex flex-col items-center justify-center gap-4 text-white">
+        <div className="absolute inset-0 z-[80] bg-gray-900/95 flex flex-col items-center justify-center gap-4 text-white">
           {incomingCall.callerProfile.images?.[0] ? (
             <img src={cloudinaryUrl(incomingCall.callerProfile.images[0], 300, 300)} className="w-32 h-32 rounded-full object-cover shadow-xl" alt={incomingCall.callerProfile.name} />
           ) : (
@@ -480,7 +480,7 @@ const App: React.FC = () => {
       )}
 
       {matchCelebration && user && (
-        <div className="absolute inset-0 z-50 bg-gradient-to-b from-red-600/95 to-green-700/95 flex flex-col items-center justify-center gap-6 text-white p-8 text-center">
+        <div className="absolute inset-0 z-[70] bg-gradient-to-b from-red-600/95 to-green-700/95 flex flex-col items-center justify-center gap-6 text-white p-8 text-center">
           <h2 className="text-4xl font-black italic tracking-tight" style={{ fontFamily: 'cursive' }}>
             {lang === 'fr' ? "C'est un match !" : "It's a match!"}
           </h2>
@@ -562,7 +562,7 @@ const App: React.FC = () => {
           />
         )}
         {currentScreen === AppScreen.LIKES && user && currentUser && <LikesScreen currentUserId={user.uid} currentUserName={currentUser.name} onMatch={handleMatch} />}
-        {currentScreen === AppScreen.MESSAGES && <MessagesScreen matches={matches} onSelectChat={openChat} />}
+        {currentScreen === AppScreen.MESSAGES && <MessagesScreen matches={matches} onSelectChat={openChat} currentUserId={user?.uid} lang={lang} />}
         {currentScreen === AppScreen.PROFILE && currentUser && <ProfileScreen user={currentUser} setUser={setCurrentUser} onSignOut={() => setShowFeedback(true)} matches={matches} lang={lang} />}
         {currentScreen === AppScreen.CHAT && activeChat && user && <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} lang={lang} onReport={handleReport} onBlock={handleBlock} onUnmatch={handleUnmatch} onStartCall={handleStartCall} me={currentUser} />}
       </main>
