@@ -9,6 +9,8 @@ import DiscoverySettingsScreen from './DiscoverySettingsScreen';
 import SafetyScreen from './SafetyScreen';
 import AIAssistantScreen from './AIAssistantScreen';
 import SelfieCaptureScreen from './SelfieCaptureScreen';
+import { InstallGuideModal, useInstallApp } from './InstallBanner';
+import { isStandalone } from '../services/installPrompt';
 
 interface Props {
   user: UserProfile;
@@ -61,6 +63,7 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
   const [multiDraft, setMultiDraft] = useState<string[]>([]);
   const [editingInterests, setEditingInterests] = useState(false);
   const [interestsDraft, setInterestsDraft] = useState<string[]>([]);
+  const installApp = useInstallApp();
 
   if (subScreen === 'discovery') return <DiscoverySettingsScreen user={user} setUser={setUser} onBack={() => setSubScreen('main')} />;
   if (subScreen === 'safety') return <SafetyScreen userId={user.id} onBack={() => setSubScreen('main')} onSignOut={onSignOut} />;
@@ -386,6 +389,17 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
               <div className="w-5 h-5 bg-white rounded-full shadow"></div>
             </div>
           </button>
+          {!isStandalone() && (
+            <button onClick={installApp.install}
+              className="w-full p-4 flex justify-between items-center hover:bg-gray-100">
+              <div className="flex items-center gap-3">
+                <i className="fa-solid fa-mobile-screen-button text-red-500"></i>
+                <span className="text-sm text-gray-700">Installer l'app sur mon téléphone</span>
+              </div>
+              <i className="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
+            </button>
+          )}
+          {installApp.showGuide && <InstallGuideModal lang={lang} onClose={installApp.closeGuide} />}
           <button onClick={handleTogglePause}
             className="w-full p-4 flex justify-between items-center hover:bg-gray-100">
             <div className="flex items-center gap-3">
