@@ -558,12 +558,13 @@ const App: React.FC = () => {
             onSuperLike={handleSuperLike}
             boostActive={!!(currentUser?.boostedUntil && currentUser.boostedUntil > Date.now())}
             onBoost={handleBoost}
+            me={currentUser}
           />
         )}
         {currentScreen === AppScreen.LIKES && user && currentUser && <LikesScreen currentUserId={user.uid} currentUserName={currentUser.name} onMatch={handleMatch} />}
         {currentScreen === AppScreen.MESSAGES && <MessagesScreen matches={matches} onSelectChat={openChat} />}
         {currentScreen === AppScreen.PROFILE && currentUser && <ProfileScreen user={currentUser} setUser={setCurrentUser} onSignOut={() => setShowFeedback(true)} matches={matches} lang={lang} />}
-        {currentScreen === AppScreen.CHAT && activeChat && user && <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} lang={lang} onReport={handleReport} onBlock={handleBlock} onUnmatch={handleUnmatch} onStartCall={handleStartCall} />}
+        {currentScreen === AppScreen.CHAT && activeChat && user && <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} lang={lang} onReport={handleReport} onBlock={handleBlock} onUnmatch={handleUnmatch} onStartCall={handleStartCall} me={currentUser} />}
       </main>
 
       {currentScreen !== AppScreen.CHAT && <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} matches={matches} likesCount={likesCount} />}

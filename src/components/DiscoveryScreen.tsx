@@ -3,6 +3,8 @@ import { UserProfile } from '../types';
 import { cloudinaryUrl } from '../services/cloudinaryService';
 import { activityStatus, relationshipGoalLabel } from '../services/profileDetails';
 import ProfileDetailModal from './ProfileDetailModal';
+import TopPicksModal from './TopPicksModal';
+import { getTopPicks } from '../services/topPicks';
 
 interface Props {
   profiles: UserProfile[];
@@ -22,11 +24,12 @@ interface Props {
   onSuperLike?: (profile: UserProfile, note?: string) => void;
   boostActive?: boolean;
   onBoost?: () => boolean;
+  me?: UserProfile | null;
 }
 
 const REPORT_REASONS = ['Faux profil', 'Contenu inapproprié', 'Harcèlement', 'Autre'];
 
-const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo, canUndo = false, onRefresh, lang = 'fr', isPremium = false, countryFilter = '', onCountrySearch, onClearCountryFilter, onReport, onBlock, canSuperLike, onSuperLike, boostActive = false, onBoost }) => {
+const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo, canUndo = false, onRefresh, lang = 'fr', isPremium = false, countryFilter = '', onCountrySearch, onClearCountryFilter, onReport, onBlock, canSuperLike, onSuperLike, boostActive = false, onBoost, me = null }) => {
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
@@ -43,6 +46,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
   const [showDetail, setShowDetail] = useState(false);
   const [superLikeNoteFor, setSuperLikeNoteFor] = useState<UserProfile | null>(null);
   const [superLikeNote, setSuperLikeNote] = useState('');
+  const [showTopPicks, setShowTopPicks] = useState(false);
 
   const startX = useRef(0);
   const animating = useRef(false);
@@ -319,6 +323,13 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
             {countryFilter && (
               <button onClick={onClearCountryFilter} className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center">
                 <i className="fa-solid fa-xmark text-xs"></i>
+              </button>
+            )}
+            {me && (
+              <button onClick={() => setShowTopPicks(true)}
+                className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-amber-600 bg-amber-50 px-3 py-2 rounded-full border border-amber-100">
+                <i className="fa-solid fa-star text-amber-400"></i>
+                {lang === 'fr' ? 'Sélection du jour' : "Today's picks"}
               </button>
             )}
           </div>
@@ -620,6 +631,17 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
           onClose={() => setShowDetail(false)}
           onLike={() => { setShowDetail(false); triggerLike(currentProfile); }}
           onDislike={() => { setShowDetail(false); triggerDislike(currentProfile.id); }}
+        />
+      )}
+
+      {showTopPicks && me && (
+        <TopPicksModal
+          picks={getTopPicks(profiles, me)}
+          me={me}
+          lang={lang}
+          onClose={() => setShowTopPicks(false)}
+          onLike={onLike}
+          onDislike={onDislike}
         />
       )}
 

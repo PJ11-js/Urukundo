@@ -36,12 +36,14 @@ service cloud.firestore {
       // Réactions emoji et suppression façon WhatsApp : "pour moi" (n'importe quel participant
       // ajoute juste son propre uid à deletedFor) ou "pour tout le monde"
       // (seul l'auteur du message peut le faire). Le contenu du message
-      // (texte/audio/expéditeur/date) ne peut jamais être modifié.
+      // (texte/audio/photo/GIF/expéditeur/date) ne peut jamais être modifié.
       allow update: if request.auth != null && request.auth.uid in chatId.split('_') &&
         request.resource.data.senderId == resource.data.senderId &&
         request.resource.data.timestamp == resource.data.timestamp &&
         request.resource.data.get('text', null) == resource.data.get('text', null) &&
         request.resource.data.get('audioUrl', null) == resource.data.get('audioUrl', null) &&
+        request.resource.data.get('imageUrl', null) == resource.data.get('imageUrl', null) &&
+        request.resource.data.get('gifUrl', null) == resource.data.get('gifUrl', null) &&
         (
           (
             request.resource.data.deletedFor is list &&

@@ -5,7 +5,9 @@ import { ChatSession, UserProfile } from '../types';
 import { getConversationStarter } from '../services/geminiService';
 import { notifyUser } from '../services/pushService';
 import { calculateDistance } from '../services/locationService';
-import { cloudinaryUrl, uploadAudio } from '../services/cloudinaryService';
+import { cloudinaryUrl, cloudinaryChatUrl, uploadAudio, uploadImage } from '../services/cloudinaryService';
+import { gifsEnabled, searchGifs, Gif } from '../services/giphyService';
+import { getIcebreakers } from '../services/icebreakers';
 import LiveLocationMap from './LiveLocationMap';
 import ProfileDetailModal from './ProfileDetailModal';
 import { activityStatus } from '../services/profileDetails';
@@ -21,12 +23,13 @@ interface Props {
   onBlock?: (profile: UserProfile) => void;
   onUnmatch?: (profile: UserProfile) => void;
   onStartCall?: (partner: UserProfile, type: 'audio' | 'video') => void;
+  me?: UserProfile | null;
 }
 
 const REPORT_REASONS_FR = ['Faux profil', 'Contenu inapproprié', 'Harcèlement', 'Autre'];
 const REPORT_REASONS_EN = ['Fake profile', 'Inappropriate content', 'Harassment', 'Other'];
 
-const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lang = 'fr', onReport, onBlock, onUnmatch, onStartCall }) => {
+const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lang = 'fr', onReport, onBlock, onUnmatch, onStartCall, me = null }) => {
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -42,6 +45,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   const lastTapRef = useRef<{ id: string; at: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pressTimerRef = useRef<number | null>(null);
+  const longPressFiredRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const watchIdRef = useRef<number | null>(null);
   const lastSentAtRef = useRef(0);
@@ -53,6 +57,13 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   const recordTimerRef = useRef<number | null>(null);
   const typingTimerRef = useRef<number | null>(null);
   const isTypingRef = useRef(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [isSendingPhoto, setIsSendingPhoto] = useState(false);
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [gifQuery, setGifQuery] = useState('');
+  const [gifs, setGifs] = useState<Gif[]>([]);
+  const [gifsLoading, setGifsLoading] = useState(false);
   const chatId = [currentUserId, session.partner.id].sort().join('_');
 
   const T = {
@@ -63,6 +74,9 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       micDenied: "Micro refusé. Autorise l'accès au micro pour envoyer un message vocal.",
       audioError: "Erreur lors de l'envoi du message vocal.", voiceMessage: '🎤 Message vocal',
       typing: 'est en train d\'écrire...', seen: 'Vu', sent: 'Envoyé',
+      photoMessage: '📷 Photo', gifMessage: 'GIF', photoError: "Erreur lors de l'envoi de la photo.", photoTooBig: 'Photo trop lourde (10 Mo maximum).',
+      gifSearch: 'Rechercher un GIF...', gifError: 'Impossible de charger les GIFs.', noGifs: 'Aucun GIF trouvé.',
+      icebreakTitle: '💡 Brise la glace', icebreakBody: 'Touche une idée pour commencer la conversation :',
       deleteForMe: 'Supprimer pour moi', deleteForEveryone: 'Supprimer pour tout le monde',
       deletedPlaceholder: 'Message supprimé',
       unmatch: 'Ne plus matcher', unmatchTitle: 'Ne plus matcher avec cette personne ?',
@@ -75,6 +89,9 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       micDenied: 'Microphone denied. Allow microphone access to send a voice message.',
       audioError: 'Error sending voice message.', voiceMessage: '🎤 Voice message',
       typing: 'is typing...', seen: 'Seen', sent: 'Sent',
+      photoMessage: '📷 Photo', gifMessage: 'GIF', photoError: 'Error sending photo.', photoTooBig: 'Photo too large (10 MB max).',
+      gifSearch: 'Search a GIF...', gifError: "Couldn't load GIFs.", noGifs: 'No GIFs found.',
+      icebreakTitle: '💡 Break the ice', icebreakBody: 'Tap an idea to start the conversation:',
       deleteForMe: 'Delete for me', deleteForEveryone: 'Delete for everyone',
       deletedPlaceholder: 'This message was deleted',
       unmatch: 'Unmatch', unmatchTitle: 'Unmatch with this person?',
@@ -253,9 +270,51 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
     setIsSendingAudio(false);
   };
 
+  const sendPhoto = async (file: File) => {
+    if (file.size > 10 * 1024 * 1024) { alert(t.photoTooBig); return; }
+    setIsSendingPhoto(true);
+    try {
+      const url = await uploadImage(file, currentUserId, 'chat');
+      await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        senderId: currentUserId, type: 'image', imageUrl: url, timestamp: serverTimestamp(),
+      });
+      setDoc(doc(db, 'matches', chatId), { lastMessageText: t.photoMessage, lastMessageSenderId: currentUserId, lastMessageAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      notifyUser(session.partner.id, lang === 'fr' ? '💬 Nouveau message' : '💬 New message', t.photoMessage);
+    } catch (err) { console.error(err); alert(t.photoError); }
+    setIsSendingPhoto(false);
+  };
+
+  const loadGifs = async (q: string) => {
+    setGifsLoading(true);
+    try { setGifs(await searchGifs(q, lang)); }
+    catch (err) { console.error(err); setGifs([]); alert(t.gifError); }
+    setGifsLoading(false);
+  };
+
+  // Recherche avec un petit délai pour ne pas appeler GIPHY à chaque lettre.
+  useEffect(() => {
+    if (!showGifPicker) return;
+    const id = window.setTimeout(() => loadGifs(gifQuery), 350);
+    return () => clearTimeout(id);
+  }, [gifQuery, showGifPicker]);
+
+  const sendGif = async (gif: Gif) => {
+    setShowGifPicker(false);
+    setGifQuery('');
+    try {
+      await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        senderId: currentUserId, type: 'gif', gifUrl: gif.url, width: gif.width, height: gif.height, timestamp: serverTimestamp(),
+      });
+      setDoc(doc(db, 'matches', chatId), { lastMessageText: t.gifMessage, lastMessageSenderId: currentUserId, lastMessageAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      notifyUser(session.partner.id, lang === 'fr' ? '💬 Nouveau message' : '💬 New message', t.gifMessage);
+    } catch (err) { console.error(err); }
+  };
+
   const startPress = (msg: any) => {
     if (msg.deletedForEveryone) return;
+    longPressFiredRef.current = false;
     pressTimerRef.current = window.setTimeout(() => {
+      longPressFiredRef.current = true;
       setDeleteTarget({ id: msg.id, isMe: msg.senderId === currentUserId });
     }, 450);
   };
@@ -317,7 +376,8 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
 
   const handleAiWingman = async () => {
     setIsAiLoading(true);
-    const suggestion = await getConversationStarter(session.partner.name, session.partner.interests, currentUserId, messages, lang);
+    const suggestion = await getConversationStarter(session.partner.name, session.partner.interests, currentUserId,
+      messages.map(m => ({ ...m, text: m.text || (m.type === 'audio' ? t.voiceMessage : m.type === 'image' ? t.photoMessage : m.type === 'gif' ? t.gifMessage : '') })), lang);
     setInputText(suggestion);
     setIsAiLoading(false);
     inputRef.current?.focus();
@@ -484,6 +544,45 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
         </div>
       )}
 
+      {viewerUrl && (
+        <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center" onClick={() => setViewerUrl(null)}>
+          <img src={viewerUrl} alt="Photo" className="max-w-full max-h-full object-contain" />
+          <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/15 text-white flex items-center justify-center">
+            <i className="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+      )}
+
+      {showGifPicker && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end" onClick={() => setShowGifPicker(false)}>
+          <div className="bg-white w-full rounded-t-3xl p-4 flex flex-col" style={{ height: '65dvh' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+              <input autoFocus value={gifQuery} onChange={e => setGifQuery(e.target.value)} placeholder={t.gifSearch}
+                className="flex-1 bg-gray-100 rounded-full px-4 py-2.5 text-sm focus:outline-none" style={{ fontSize: '16px' }} />
+              <button onClick={() => setShowGifPicker(false)} className="w-9 h-9 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center">
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {gifsLoading && !gifs.length ? (
+                <div className="text-center text-gray-400 py-10"><i className="fa-solid fa-spinner fa-spin"></i></div>
+              ) : !gifs.length ? (
+                <p className="text-center text-gray-400 text-sm py-10">{t.noGifs}</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-1.5">
+                  {gifs.map(g => (
+                    <button key={g.id} onClick={() => sendGif(g)} className="aspect-square rounded-lg overflow-hidden bg-gray-100 active:scale-95 transition-transform">
+                      <img src={g.previewUrl} alt="GIF" className="w-full h-full object-cover" loading="lazy" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] text-gray-300 text-center pt-2 flex-shrink-0">Powered by GIPHY</p>
+          </div>
+        </div>
+      )}
+
       {showWhatsApp && (
         <div className="bg-green-50 p-4 border-b border-green-100 flex-shrink-0">
           <p className="text-xs text-green-700 font-medium mb-2">{t.whatsappPrompt}</p>
@@ -517,6 +616,21 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
             distanceKm={calculateDistance(myCoords.lat, myCoords.lng, partnerCoords.lat, partnerCoords.lng)}
           />
         )}
+        {messages.length === 0 && (
+          <div className="bg-white border border-amber-100 rounded-2xl p-4 shadow-sm">
+            <p className="font-bold text-gray-800 text-sm">{t.icebreakTitle}</p>
+            <p className="text-xs text-gray-400 mt-0.5 mb-3">{t.icebreakBody}</p>
+            <div className="space-y-2">
+              {getIcebreakers(session.partner, me, lang).map(idea => (
+                <button key={idea} onClick={() => { setInputText(idea); inputRef.current?.focus(); }}
+                  className="w-full text-left text-sm text-gray-700 bg-amber-50 hover:bg-amber-100 rounded-xl px-3 py-2.5 transition-colors">
+                  {idea}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {visibleMessages.map((msg, i) => {
           const isMe = msg.senderId === currentUserId;
           const isLast = i === visibleMessages.length - 1;
@@ -526,6 +640,27 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
                 <div className="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm italic text-gray-400 bg-gray-100">
                   {t.deletedPlaceholder}
                 </div>
+              </div>
+            );
+          }
+          if (msg.type === 'image' || msg.type === 'gif') {
+            const src = msg.type === 'image' ? cloudinaryChatUrl(msg.imageUrl, 600) : msg.gifUrl;
+            return (
+              <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                <div
+                  onMouseDown={() => startPress(msg)} onMouseUp={cancelPress} onMouseLeave={cancelPress}
+                  onTouchStart={() => startPress(msg)} onTouchEnd={cancelPress} onTouchCancel={cancelPress}
+                  onClick={() => { if (msg.type === 'image' && !longPressFiredRef.current) setViewerUrl(cloudinaryChatUrl(msg.imageUrl, 1400)); }}
+                  className={`max-w-[65%] rounded-2xl overflow-hidden select-none bg-gray-100 ${isMe ? 'rounded-br-none' : 'rounded-bl-none'}`}>
+                  <img src={src} alt={msg.type === 'gif' ? 'GIF' : 'Photo'} className="block w-full h-auto max-h-80 object-cover" loading="lazy"
+                    style={msg.width && msg.height ? { aspectRatio: `${msg.width} / ${msg.height}` } : undefined} />
+                </div>
+                {renderReactions(msg, isMe)}
+                {isMe && isLast && (
+                  <span className="text-[10px] text-gray-400 mt-0.5 px-1">
+                    {partnerLastRead !== undefined && partnerLastRead >= msg.timestamp ? t.seen : t.sent}
+                  </span>
+                )}
               </div>
             );
           }
@@ -604,9 +739,21 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
             </div>
           ) : (
             <div className="flex items-center gap-2">
+              <input ref={photoInputRef} type="file" accept="image/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) sendPhoto(f); }} />
+              <button onClick={() => photoInputRef.current?.click()} disabled={isSendingPhoto}
+                className="w-9 h-9 rounded-full text-gray-400 hover:text-red-500 flex items-center justify-center flex-shrink-0 disabled:opacity-50">
+                <i className={`fa-solid ${isSendingPhoto ? 'fa-spinner fa-spin' : 'fa-image'} text-xl`}></i>
+              </button>
+              {gifsEnabled && (
+                <button onClick={() => setShowGifPicker(true)}
+                  className="h-7 px-1.5 rounded-md border-2 border-gray-300 text-gray-400 hover:text-red-500 hover:border-red-400 text-[10px] font-black flex items-center flex-shrink-0">
+                  GIF
+                </button>
+              )}
               <input ref={inputRef} type="text" value={inputText} onChange={handleInputChange}
                 placeholder={t.placeholder} onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                className="flex-1 bg-gray-100 rounded-full px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-100"
+                className="flex-1 min-w-0 bg-gray-100 rounded-full px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-100"
                 style={{ fontSize: '16px' }} />
               {inputText.trim() ? (
                 <button onClick={handleSend}

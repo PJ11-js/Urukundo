@@ -1,11 +1,11 @@
 const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
 const UPLOAD_PRESET = 'urukundo_unsigned';
 
-export const uploadImage = async (file: File, userId: string): Promise<string> => {
+export const uploadImage = async (file: File, userId: string, folder: 'profiles' | 'chat' = 'profiles'): Promise<string> => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('upload_preset', UPLOAD_PRESET);
-  formData.append('folder', `urukundo/profiles/${userId}`);
+  formData.append('folder', `urukundo/${folder}/${userId}`);
   formData.append('public_id', `photo_${userId}_${Date.now()}`);
 
   const response = await fetch(
@@ -51,4 +51,14 @@ export const cloudinaryUrl = (url: string, width: number, height: number): strin
   const looksLikeTransform = /^[a-z]+_[^/,]+(,[a-z]+_[^/,]+)*$/.test(segments[0] || '') && !/^v\d+$/.test(segments[0] || '');
   if (looksLikeTransform) segments.shift();
   return `${before}c_fill,g_auto,w_${width},h_${height},q_auto,f_auto/${segments.join('/')}`;
+};
+
+// Photos envoyées dans le chat : on garde les proportions d'origine (pas de
+// recadrage comme pour les cartes), juste réduites et compressées.
+export const cloudinaryChatUrl = (url: string, maxWidth: number): string => {
+  if (!url || !url.includes('res.cloudinary.com')) return url;
+  const marker = '/image/upload/';
+  const idx = url.indexOf(marker);
+  if (idx === -1) return url;
+  return `${url.slice(0, idx + marker.length)}c_limit,w_${maxWidth},q_auto,f_auto/${url.slice(idx + marker.length)}`;
 };
