@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { signInWithPopup, getRedirectResult, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 
+const PHONE_LOGIN_ENABLED = false;
+
 interface Props {
   onLangSelect: (lang: 'fr' | 'en') => void;
   lang: 'fr' | 'en';
@@ -255,11 +257,13 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
           {loadingProvider === 'google' ? t.connecting : t.google}
         </button>
 
-        <button onClick={() => { setPhoneOpen(true); setError(''); setInfo(''); }} disabled={loadingProvider !== null}
+        {/* Connexion SMS désactivée : Firebase exige un compte de facturation (auth/billing-not-enabled).
+            Passer PHONE_LOGIN_ENABLED à true une fois le projet sur le plan Blaze. */}
+        {PHONE_LOGIN_ENABLED && <button onClick={() => { setPhoneOpen(true); setError(''); setInfo(''); }} disabled={loadingProvider !== null}
           className="w-full py-4 px-6 bg-[#118b44] rounded-2xl flex items-center justify-center gap-3 font-semibold text-white hover:bg-[#0f7a3c] transition-all active:scale-95 disabled:opacity-50 shadow-sm">
           <i className="fa-solid fa-mobile-screen text-lg"></i>
           {t.phoneBtn}
-        </button>
+        </button>}
 
         <div className="flex items-center gap-3 text-gray-400 text-sm">
           <div className="flex-1 h-px bg-gray-200"></div>{t.or}<div className="flex-1 h-px bg-gray-200"></div>
