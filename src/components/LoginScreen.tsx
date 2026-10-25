@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { signInWithPopup, getRedirectResult, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
+import React, { useState, useEffect, useRef } from 'react';
+import { signInWithPopup, getRedirectResult, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 
 interface Props {
@@ -8,16 +8,21 @@ interface Props {
 }
 
 const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
-  const [loadingProvider, setLoadingProvider] = useState<'google' | 'email' | null>(null);
+  const [loadingProvider, setLoadingProvider] = useState<'google' | 'email' | 'phone' | null>(null);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [emailMode, setEmailMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const [phone, setPhone] = useState('+257 ');
+  const [smsCode, setSmsCode] = useState('');
+  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
+  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
 
   const T = {
-    fr: { title: 'L\'application de rencontre pour les Burundais du monde entier', community: 'Rejoins la communauté Urukundo', google: 'Continuer avec Google', or: 'ou', email: 'E-mail', password: 'Mot de passe', login: 'Se connecter', signup: 'Créer mon compte', toSignup: 'Pas encore de compte ? Crée-le ici', toLogin: 'Déjà un compte ? Connecte-toi', forgot: 'Mot de passe oublié ?', resetSent: 'E-mail envoyé ! Regarde ta boîte mail (et les spams) pour choisir un nouveau mot de passe.', needEmail: 'Écris d\'abord ton adresse e-mail.', errInvalidEmail: 'Adresse e-mail invalide.', errWeak: 'Le mot de passe doit avoir au moins 6 caractères.', errInUse: 'Un compte existe déjà avec cet e-mail. Connecte-toi.', errWrong: 'E-mail ou mot de passe incorrect.', errTooMany: 'Trop d\'essais. Attends quelques minutes et réessaie.', errEmail: 'Erreur. Réessaie dans un moment.', connecting: 'Connexion...', error: 'Erreur de connexion. Ouvre ce site dans ton navigateur (Safari/Chrome) et réessaie.', diaspora: 'Diaspora', meetings: 'Rencontres', chat: 'Chat', browserTip: '💡 Pour une meilleure expérience, ouvre ce lien dans Safari ou Chrome' },
-    en: { title: 'The dating app for Burundians around the world', community: 'Join the Urukundo community', google: 'Continue with Google', or: 'or', email: 'Email', password: 'Password', login: 'Log in', signup: 'Create my account', toSignup: 'No account yet? Create one here', toLogin: 'Already have an account? Log in', forgot: 'Forgot password?', resetSent: 'Email sent! Check your inbox (and spam) to choose a new password.', needEmail: 'Enter your email address first.', errInvalidEmail: 'Invalid email address.', errWeak: 'Password must be at least 6 characters.', errInUse: 'An account already exists with this email. Log in.', errWrong: 'Wrong email or password.', errTooMany: 'Too many attempts. Wait a few minutes and try again.', errEmail: 'Error. Try again in a moment.', connecting: 'Connecting...', error: 'Connection error. Open this site in your browser (Safari/Chrome) and try again.', diaspora: 'Diaspora', meetings: 'Dating', chat: 'Chat', browserTip: '💡 For a better experience, open this link in Safari or Chrome' }
+    fr: { title: 'L\'application de rencontre pour les Burundais du monde entier', community: 'Rejoins la communauté Urukundo', google: 'Continuer avec Google', or: 'ou', email: 'E-mail', password: 'Mot de passe', login: 'Se connecter', signup: 'Créer mon compte', toSignup: 'Pas encore de compte ? Crée-le ici', toLogin: 'Déjà un compte ? Connecte-toi', forgot: 'Mot de passe oublié ?', resetSent: 'E-mail envoyé ! Regarde ta boîte mail (et les spams) pour choisir un nouveau mot de passe.', needEmail: 'Écris d\'abord ton adresse e-mail.', errInvalidEmail: 'Adresse e-mail invalide.', errWeak: 'Le mot de passe doit avoir au moins 6 caractères.', errInUse: 'Un compte existe déjà avec cet e-mail. Connecte-toi.', errWrong: 'E-mail ou mot de passe incorrect.', errTooMany: 'Trop d\'essais. Attends quelques minutes et réessaie.', errEmail: 'Erreur. Réessaie dans un moment.', phoneBtn: 'Continuer avec mon téléphone', phoneLabel: 'Ton numéro avec l\'indicatif du pays (+257 pour le Burundi)', sendCode: 'Recevoir le code par SMS', codeSent: 'Code envoyé au', codeLabel: 'Code à 6 chiffres', verify: 'Valider', changeNumber: 'Changer de numéro', back: '← Autres moyens de connexion', errPhone: 'Numéro invalide. Vérifie l\'indicatif (ex : +257 79 12 34 56).', errCode: 'Code incorrect. Vérifie le SMS et réessaie.', errCodeExpired: 'Code expiré. Demande un nouveau code.', errQuota: 'Trop de SMS envoyés aujourd\'hui. Utilise ton e-mail ou Google, ou réessaie demain.', errSmsRegion: 'Les SMS ne sont pas disponibles pour ce pays. Utilise ton e-mail ou Google.', connecting: 'Connexion...', error: 'Erreur de connexion. Ouvre ce site dans ton navigateur (Safari/Chrome) et réessaie.', diaspora: 'Diaspora', meetings: 'Rencontres', chat: 'Chat', browserTip: '💡 Pour une meilleure expérience, ouvre ce lien dans Safari ou Chrome' },
+    en: { title: 'The dating app for Burundians around the world', community: 'Join the Urukundo community', google: 'Continue with Google', or: 'or', email: 'Email', password: 'Password', login: 'Log in', signup: 'Create my account', toSignup: 'No account yet? Create one here', toLogin: 'Already have an account? Log in', forgot: 'Forgot password?', resetSent: 'Email sent! Check your inbox (and spam) to choose a new password.', needEmail: 'Enter your email address first.', errInvalidEmail: 'Invalid email address.', errWeak: 'Password must be at least 6 characters.', errInUse: 'An account already exists with this email. Log in.', errWrong: 'Wrong email or password.', errTooMany: 'Too many attempts. Wait a few minutes and try again.', errEmail: 'Error. Try again in a moment.', phoneBtn: 'Continue with my phone', phoneLabel: 'Your number with country code (+257 for Burundi)', sendCode: 'Get the code by SMS', codeSent: 'Code sent to', codeLabel: '6-digit code', verify: 'Confirm', changeNumber: 'Change number', back: '← Other ways to log in', errPhone: 'Invalid number. Check the country code (e.g. +257 79 12 34 56).', errCode: 'Wrong code. Check the SMS and try again.', errCodeExpired: 'Code expired. Request a new one.', errQuota: 'Too many SMS sent today. Use your email or Google, or try again tomorrow.', errSmsRegion: 'SMS is not available for this country. Use your email or Google.', connecting: 'Connecting...', error: 'Connection error. Open this site in your browser (Safari/Chrome) and try again.', diaspora: 'Diaspora', meetings: 'Dating', chat: 'Chat', browserTip: '💡 For a better experience, open this link in Safari or Chrome' }
   };
   const t = T[lang];
 
@@ -92,6 +97,64 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
     setLoadingProvider(null);
   };
 
+  const phoneErrorMessage = (code: string) => {
+    switch (code) {
+      case 'auth/invalid-phone-number':
+      case 'auth/missing-phone-number': return t.errPhone;
+      case 'auth/invalid-verification-code':
+      case 'auth/missing-verification-code': return t.errCode;
+      case 'auth/code-expired': return t.errCodeExpired;
+      // Plan gratuit Firebase : 10 SMS/jour max pour tout le projet.
+      case 'auth/quota-exceeded': return t.errQuota;
+      case 'auth/operation-not-allowed': return t.errSmsRegion;
+      case 'auth/too-many-requests': return t.errTooMany;
+      default: return `${t.errEmail} (${code || 'erreur inconnue'})`;
+    }
+  };
+
+  // "+257 79-12 34 56" / "00257..." -> "+2577912 3456" sans espaces, format attendu par Firebase.
+  const normalizePhone = (raw: string) => {
+    let n = raw.replace(/[\s\-().]/g, '');
+    if (n.startsWith('00')) n = '+' + n.slice(2);
+    return n;
+  };
+
+  const handleSendCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoadingProvider('phone');
+    setError('');
+    try {
+      // reCAPTCHA invisible exigé par Firebase pour les SMS web (anti-abus), rien à cliquer.
+      if (!recaptchaRef.current) {
+        recaptchaRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
+      }
+      const result = await signInWithPhoneNumber(auth, normalizePhone(phone), recaptchaRef.current);
+      setConfirmation(result);
+      setSmsCode('');
+    } catch (err: any) {
+      console.error(err);
+      setError(phoneErrorMessage(err?.code));
+      // Un verifier déjà utilisé ne peut pas resservir : on le recrée au prochain essai.
+      recaptchaRef.current?.clear();
+      recaptchaRef.current = null;
+    }
+    setLoadingProvider(null);
+  };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!confirmation) return;
+    setLoadingProvider('phone');
+    setError('');
+    try {
+      await confirmation.confirm(smsCode.trim());
+    } catch (err: any) {
+      console.error(err);
+      setError(phoneErrorMessage(err?.code));
+    }
+    setLoadingProvider(null);
+  };
+
   const handleForgotPassword = async () => {
     setError('');
     setInfo('');
@@ -142,6 +205,41 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
 
         {error && <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl text-center">{error}</div>}
 
+        <div id="recaptcha-container"></div>
+
+        {phoneOpen ? (
+          <div className="space-y-3">
+            {!confirmation ? (
+              <form onSubmit={handleSendCode} className="space-y-3">
+                <label className="block text-sm text-gray-600">{t.phoneLabel}</label>
+                <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required
+                  autoComplete="tel" inputMode="tel"
+                  className="w-full py-3.5 px-5 border-2 border-gray-200 rounded-2xl text-gray-800 text-lg tracking-wide focus:border-green-500 focus:outline-none" />
+                <button type="submit" disabled={loadingProvider !== null}
+                  className="w-full py-4 px-6 bg-[#118b44] rounded-2xl flex items-center justify-center gap-3 font-semibold text-white hover:bg-[#0f7a3c] transition-all active:scale-95 disabled:opacity-50 shadow-sm">
+                  {loadingProvider === 'phone' ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-comment-sms text-lg"></i>}
+                  {loadingProvider === 'phone' ? t.connecting : t.sendCode}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyCode} className="space-y-3">
+                <p className="text-sm text-gray-600 text-center">{t.codeSent} <span className="font-semibold">{normalizePhone(phone)}</span></p>
+                <input type="text" value={smsCode} onChange={e => setSmsCode(e.target.value.replace(/\D/g, '').slice(0, 6))} required
+                  autoComplete="one-time-code" inputMode="numeric" placeholder={t.codeLabel}
+                  className="w-full py-3.5 px-5 border-2 border-gray-200 rounded-2xl text-gray-800 text-2xl text-center tracking-[0.5em] focus:border-green-500 focus:outline-none" />
+                <button type="submit" disabled={loadingProvider !== null || smsCode.length < 6}
+                  className="w-full py-4 px-6 bg-[#118b44] rounded-2xl flex items-center justify-center gap-3 font-semibold text-white hover:bg-[#0f7a3c] transition-all active:scale-95 disabled:opacity-50 shadow-sm">
+                  {loadingProvider === 'phone' ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-check text-lg"></i>}
+                  {loadingProvider === 'phone' ? t.connecting : t.verify}
+                </button>
+                <button type="button" onClick={() => { setConfirmation(null); setError(''); }}
+                  className="w-full text-sm text-gray-500">{t.changeNumber}</button>
+              </form>
+            )}
+            <button type="button" onClick={() => { setPhoneOpen(false); setConfirmation(null); setError(''); }}
+              className="w-full text-sm text-red-500 font-semibold pt-2">{t.back}</button>
+          </div>
+        ) : (<>
         <button onClick={handleGoogleLogin} disabled={loadingProvider !== null}
           className="w-full py-4 px-6 bg-white border-2 border-gray-200 rounded-2xl flex items-center justify-center gap-3 font-semibold text-gray-700 hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-50 shadow-sm">
           {loadingProvider === 'google' ? (
@@ -155,6 +253,12 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
             </svg>
           )}
           {loadingProvider === 'google' ? t.connecting : t.google}
+        </button>
+
+        <button onClick={() => { setPhoneOpen(true); setError(''); setInfo(''); }} disabled={loadingProvider !== null}
+          className="w-full py-4 px-6 bg-[#118b44] rounded-2xl flex items-center justify-center gap-3 font-semibold text-white hover:bg-[#0f7a3c] transition-all active:scale-95 disabled:opacity-50 shadow-sm">
+          <i className="fa-solid fa-mobile-screen text-lg"></i>
+          {t.phoneBtn}
         </button>
 
         <div className="flex items-center gap-3 text-gray-400 text-sm">
@@ -190,6 +294,7 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
             <button onClick={handleForgotPassword} className="text-gray-500">{t.forgot}</button>
           )}
         </div>
+        </>)}
 
         {(isIOS || isWebView) && (
           <p className="text-xs text-gray-400 text-center">
