@@ -4,6 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Urukundo 🇧🇮 - Dating Burundais</title>
+    <script>
+      // Safari/Chrome iOS : la barre d'outils peut être "dépliée" au premier
+      // rendu sans que 100vh/100dvh ne s'actualise aussitôt, ce qui pousse
+      // des boutons en bas d'écran (ex. CGU) hors de la zone visible. On
+      // calcule la vraie hauteur visible en JS et on la ré-applique à chaque
+      // changement (resize, rotation, apparition de la barre d'outils).
+      (function () {
+        // visualViewport.height est plus fiable que window.innerHeight pour
+        // la hauteur réellement visible (il exclut la barre d'outils du
+        // navigateur, en haut comme en bas selon le navigateur/réglage).
+        const vv = window.visualViewport;
+        const setAppVh = () => {
+          const h = vv ? vv.height : window.innerHeight;
+          document.documentElement.style.setProperty('--app-vh', h * 0.01 + 'px');
+        };
+        setAppVh();
+        window.addEventListener('resize', setAppVh);
+        window.addEventListener('orientationchange', setAppVh);
+        if (vv) { vv.addEventListener('resize', setAppVh); vv.addEventListener('scroll', setAppVh); }
+        // Filet de sécurité : sur certains Chrome/Safari iOS, la toute première
+        // valeur lue au chargement est fausse tant que la barre d'outils n'a
+        // pas fini de se positionner — on recalcule une fois la page stabilisée.
+        setTimeout(setAppVh, 300);
+        setTimeout(setAppVh, 1000);
+      })();
+    </script>
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#ce1126" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -20,6 +46,7 @@
         font-family: 'Inter', sans-serif;
         height: 100vh;
         height: 100dvh;
+        height: calc(var(--app-vh, 1vh) * 100);
         background: white;
         overscroll-behavior: none;
         overflow: hidden;

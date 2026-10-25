@@ -1,9 +1,9 @@
 {
   "redirects": [
     {
-      "source": "/:path*",
+      "source": "/(.*)",
       "has": [{ "type": "host", "value": "urukundo-2qq5.vercel.app" }],
-      "destination": "https://urukundoapp.com/:path*",
+      "destination": "https://urukundoapp.com/$1",
       "permanent": true
     }
   ],
