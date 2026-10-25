@@ -21,6 +21,7 @@ import ThemeToggle, { Theme } from './components/ThemeToggle';
 import CallScreen from './components/CallScreen';
 import { createCallDoc, declineCall } from './services/callService';
 import { cloudinaryUrl } from './services/cloudinaryService';
+import { startRingtone, stopRingtone } from './services/ringtone';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -239,7 +240,12 @@ const App: React.FC = () => {
     if (!user) { setIncomingCall(null); return; }
     const q = query(collection(db, 'calls'), where('calleeId', '==', user.uid), where('status', '==', 'ringing'));
     const unsub = onSnapshot(q, async (snapshot) => {
-      const d = snapshot.docs[0];
+      // Un appel resté "ringing" (appelant parti sans raccrocher) ne doit pas
+      // resonner des heures plus tard : on ignore ceux de plus d'une minute.
+      const d = snapshot.docs.find(c => {
+        const created = c.data().createdAt?.toMillis?.();
+        return !created || Date.now() - created < 60 * 1000;
+      });
       if (!d) { setIncomingCall(null); return; }
       const data = d.data() as any;
       try {
@@ -255,9 +261,23 @@ const App: React.FC = () => {
     if (!user) return;
     const callId = await createCallDoc(user.uid, partner.id, type);
     notifyUser(partner.id, type === 'video' ? '📹 Appel vidéo entrant' : '📞 Appel entrant',
-      lang === 'fr' ? `${currentUser?.name || 'Quelqu\'un'} t'appelle sur Urukundo` : `${currentUser?.name || 'Someone'} is calling you on Urukundo`);
+      lang === 'fr' ? `${currentUser?.name || 'Quelqu\'un'} t'appelle sur Urukundo` : `${currentUser?.name || 'Someone'} is calling you on Urukundo`,
+      { kind: 'call', callId });
     setActiveCall({ callId, partner, type, role: 'caller' });
   };
+
+  const handleMissedCall = (callId: string, partner: UserProfile) => {
+    notifyUser(partner.id, '📞 Appel manqué',
+      lang === 'fr' ? `Tu as manqué un appel de ${currentUser?.name || 'quelqu\'un'}` : `You missed a call from ${currentUser?.name || 'someone'}`,
+      { kind: 'missed-call', callId });
+  };
+
+  // Sonnerie + vibration tant que l'écran d'appel entrant est affiché.
+  useEffect(() => {
+    if (incomingCall && !activeCall) startRingtone();
+    else stopRingtone();
+    return () => stopRingtone();
+  }, [incomingCall, activeCall]);
 
   const handleAcceptCall = () => {
     if (!incomingCall) return;
@@ -524,6 +544,7 @@ const App: React.FC = () => {
           offer={activeCall.offer}
           lang={lang}
           onEnd={() => setActiveCall(null)}
+          onMissed={() => handleMissedCall(activeCall.callId, activeCall.partner)}
         />
       )}
 

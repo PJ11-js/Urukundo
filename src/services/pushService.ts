@@ -25,10 +25,12 @@ export const registerPush = async (userId: string): Promise<void> => {
 };
 
 // Déclenche l'envoi côté serveur (fonction Vercel) — fire-and-forget.
-export const notifyUser = (toUserId: string, title: string, body: string): void => {
+// kind 'call' / 'missed-call' : notification d'appel gérée par le service worker
+// (reste affichée, vibre, remplacée par "Appel manqué" si personne ne répond).
+export const notifyUser = (toUserId: string, title: string, body: string, extra?: { kind: 'call' | 'missed-call'; callId: string }): void => {
   fetch('/api/notify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ toUserId, title, body }),
+    body: JSON.stringify({ toUserId, title, body, ...extra }),
   }).catch(() => {});
 };

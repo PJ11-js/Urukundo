@@ -11,7 +11,7 @@ function getAdminApp() {
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { toUserId, title, body } = req.body || {};
+  const { toUserId, title, body, kind, callId } = req.body || {};
   if (!toUserId || !title || !body) return res.status(400).json({ error: 'Missing fields' });
 
   try {
@@ -21,7 +21,16 @@ export default async function handler(req: any, res: any) {
     const tokens: string[] = userSnap.data()?.fcmTokens || [];
     if (tokens.length === 0) return res.status(200).json({ sent: 0 });
 
-    const response = await admin.messaging().sendEachForMulticast({
+    // Appels : message "data" seulement, pour que le service worker affiche une
+    // notification d'appel (persistante, vibration, remplacée par "Appel manqué").
+    // Urgency high = livrée tout de suite même si le téléphone est en veille ;
+    // TTL court = inutile de sonner 10 minutes après la fin de l'appel.
+    const isCall = kind === 'call' || kind === 'missed-call';
+    const response = await admin.messaging().sendEachForMulticast(isCall ? {
+      tokens,
+      data: { kind, callId: String(callId || ''), title, body },
+      webpush: { headers: { Urgency: 'high', TTL: kind === 'call' ? '45' : '86400' } },
+    } : {
       tokens,
       notification: { title, body },
       webpush: { fcmOptions: { link: '/' } },

@@ -14,7 +14,12 @@ interface Props {
   offer?: { type: RTCSdpType; sdp: string };
   lang?: 'fr' | 'en';
   onEnd: () => void;
+  // Appelant seulement : l'appel s'arrête sans que l'autre ait décroché
+  // (raccroché ou 45 s sans réponse) -> App envoie la notification "Appel manqué".
+  onMissed?: () => void;
 }
+
+const RING_TIMEOUT_MS = 45000;
 
 const T = {
   fr: { calling: 'Appel en cours...', connecting: 'Connexion...', ended: 'Appel terminé', failed: "Impossible d'établir l'appel.",
@@ -25,7 +30,7 @@ const T = {
 
 const formatDuration = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-const CallScreen: React.FC<Props> = ({ callId, currentUserId, partner, type, role, offer, lang = 'fr', onEnd }) => {
+const CallScreen: React.FC<Props> = ({ callId, currentUserId, partner, type, role, offer, lang = 'fr', onEnd, onMissed }) => {
   const t = T[lang];
   const [status, setStatus] = useState<'connecting' | 'in-call' | 'ended' | 'failed'>('connecting');
   const [muted, setMuted] = useState(false);
@@ -38,6 +43,8 @@ const CallScreen: React.FC<Props> = ({ callId, currentUserId, partner, type, rol
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const endedRef = useRef(false);
   const durationTimerRef = useRef<number | null>(null);
+  const answeredRef = useRef(false);
+  const declinedRef = useRef(false);
 
   const cleanup = () => {
     if (endedRef.current) return;
@@ -48,10 +55,19 @@ const CallScreen: React.FC<Props> = ({ callId, currentUserId, partner, type, rol
   };
 
   const handleHangup = () => {
+    if (role === 'caller' && !answeredRef.current && !declinedRef.current) onMissed?.();
     endCall(callId);
     cleanup();
     onEnd();
   };
+
+  // Personne ne décroche : on arrête de sonner au bout de 45 s, comme WhatsApp.
+  useEffect(() => {
+    if (role !== 'caller') return;
+    const id = window.setTimeout(() => { if (!answeredRef.current && !endedRef.current) handleHangup(); }, RING_TIMEOUT_MS);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callId]);
 
   useEffect(() => {
     let unsubCallDoc: (() => void) | undefined;
@@ -101,6 +117,8 @@ const CallScreen: React.FC<Props> = ({ callId, currentUserId, partner, type, rol
           unsubCallDoc = onSnapshot(doc(db, 'calls', callId), async (snap) => {
             const data = snap.data();
             if (!data) return;
+            if (data.answer) answeredRef.current = true;
+            if (data.status === 'declined') declinedRef.current = true;
             if (data.answer && !pc.currentRemoteDescription) {
               await pc.setRemoteDescription(new RTCSessionDescription(data.answer)).catch(() => {});
             }
