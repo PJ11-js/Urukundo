@@ -141,7 +141,7 @@ const LegalScreen: React.FC<Props> = ({ onAccept }) => {
         )}
       </div>
 
-      <div className="p-6 border-t border-gray-100 space-y-3" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
+      <div className="p-6 border-t border-gray-100 space-y-3">
         <p className="text-xs text-gray-400 text-center">
           En continuant, tu confirmes avoir lu et accepté les <span className="text-red-500 font-medium">Conditions d'utilisation</span> et la <span className="text-red-500 font-medium">Politique de confidentialité</span> d'Urukundo.
         </p>

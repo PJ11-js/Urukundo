@@ -27,7 +27,7 @@ const SelfieCaptureScreen: React.FC<Props> = ({ lang, onCapture, onCancel }) => 
     (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 900 }, height: { ideal: 900 } },
+          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 640 } },
           audio: false,
         });
         if (cancelled) { stream.getTracks().forEach(tr => tr.stop()); return; }
@@ -46,7 +46,7 @@ const SelfieCaptureScreen: React.FC<Props> = ({ lang, onCapture, onCancel }) => 
   const handleShot = () => {
     const video = videoRef.current;
     if (!video || !video.videoWidth) return;
-    const size = 900;
+    const size = 640;
     const side = Math.min(video.videoWidth, video.videoHeight);
     const sx = (video.videoWidth - side) / 2;
     const sy = (video.videoHeight - side) / 2;

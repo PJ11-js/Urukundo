@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { signInWithPopup, getRedirectResult } from 'firebase/auth';
 import { auth, googleProvider, facebookProvider } from '../firebase';
 
 interface Props {
@@ -20,11 +20,6 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
   // Vérifie si on est dans une webview Instagram/Facebook
   const isWebView = /Instagram|FBAN|FBAV|Twitter|Line\//.test(navigator.userAgent);
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  // signInWithPopup est connu pour échouer silencieusement sur mobile (Safari/Chrome
-  // iOS bloquent ou cassent le popup à cause de l'ITP/anti-tracking) - on bascule sur
-  // signInWithRedirect dans ce cas, dont le retour est déjà géré par getRedirectResult
-  // ci-dessous (avant, ce handler ne servait jamais puisque le popup était utilisé partout).
-  const isMobile = /iPad|iPhone|iPod|Android/.test(navigator.userAgent);
   // App installée sur l'écran d'accueil (PWA), iOS ou Android : ni signInWithPopup ni
   // signInWithRedirect ne ramènent le résultat de façon fiable dans ce contexte (testé sur les
   // deux plateformes) - l'app perd le fil pendant l'aller-retour vers Google/Facebook et revient
@@ -51,13 +46,12 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
     setLoadingProvider('google');
     setError('');
     try {
-      if (isMobile) await signInWithRedirect(auth, googleProvider);
-      else await signInWithPopup(auth, googleProvider);
+      await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.error(err);
       setError(`${t.error} (${err?.code || 'erreur inconnue'})`);
-      setLoadingProvider(null);
     }
+    setLoadingProvider(null);
   };
 
   const handleFacebookLogin = async () => {
@@ -68,13 +62,12 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
     setLoadingProvider('facebook');
     setError('');
     try {
-      if (isMobile) await signInWithRedirect(auth, facebookProvider);
-      else await signInWithPopup(auth, facebookProvider);
+      await signInWithPopup(auth, facebookProvider);
     } catch (err: any) {
       console.error(err);
       setError(`${t.error} (${err?.code || 'erreur inconnue'})`);
-      setLoadingProvider(null);
     }
+    setLoadingProvider(null);
   };
 
   return (

@@ -188,9 +188,7 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
     if (!user.images[0]) return;
     setIsVerifying(true);
     try {
-      // Photo originale (pas la vignette recadrée/compressée pour l'affichage) :
-      // on veut le maximum de détail du visage pour la comparaison IA.
-      const result = await verifyIdentitySelfie(blob, user.images[0]);
+      const result = await verifyIdentitySelfie(blob, cloudinaryUrl(user.images[0], 500, 500));
       if (result === 'match') {
         await updateDoc(doc(db, 'users', user.id), { identityVerified: true });
         setUser(prev => prev ? { ...prev, identityVerified: true } : null);
