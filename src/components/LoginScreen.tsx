@@ -101,7 +101,7 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
         {(isWebView || isStandalone) && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 text-center">
             <p className="text-sm text-yellow-700 font-medium">{t.browserTip}</p>
-            <p className="text-xs text-yellow-600 mt-1">urukundo-2qq5.vercel.app</p>
+            <p className="text-xs text-yellow-600 mt-1">urukundoapp.com</p>
           </div>
         )}
 
