@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { signInWithPopup, getRedirectResult } from 'firebase/auth';
-import { auth, googleProvider, facebookProvider } from '../firebase';
+import { signInWithPopup, getRedirectResult, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
+import { auth, googleProvider } from '../firebase';
 
 interface Props {
   onLangSelect: (lang: 'fr' | 'en') => void;
@@ -8,12 +8,16 @@ interface Props {
 }
 
 const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
-  const [loadingProvider, setLoadingProvider] = useState<'google' | 'facebook' | null>(null);
+  const [loadingProvider, setLoadingProvider] = useState<'google' | 'email' | null>(null);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
+  const [emailMode, setEmailMode] = useState<'login' | 'signup'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const T = {
-    fr: { title: 'L\'application de rencontre pour les Burundais du monde entier', community: 'Rejoins la communauté Urukundo', google: 'Continuer avec Google', facebook: 'Continuer avec Facebook', connecting: 'Connexion...', error: 'Erreur de connexion. Ouvre ce site dans ton navigateur (Safari/Chrome) et réessaie.', diaspora: 'Diaspora', meetings: 'Rencontres', chat: 'Chat', browserTip: '💡 Pour une meilleure expérience, ouvre ce lien dans Safari ou Chrome' },
-    en: { title: 'The dating app for Burundians around the world', community: 'Join the Urukundo community', google: 'Continue with Google', facebook: 'Continue with Facebook', connecting: 'Connecting...', error: 'Connection error. Open this site in your browser (Safari/Chrome) and try again.', diaspora: 'Diaspora', meetings: 'Dating', chat: 'Chat', browserTip: '💡 For a better experience, open this link in Safari or Chrome' }
+    fr: { title: 'L\'application de rencontre pour les Burundais du monde entier', community: 'Rejoins la communauté Urukundo', google: 'Continuer avec Google', or: 'ou', email: 'E-mail', password: 'Mot de passe', login: 'Se connecter', signup: 'Créer mon compte', toSignup: 'Pas encore de compte ? Crée-le ici', toLogin: 'Déjà un compte ? Connecte-toi', forgot: 'Mot de passe oublié ?', resetSent: 'E-mail envoyé ! Regarde ta boîte mail (et les spams) pour choisir un nouveau mot de passe.', needEmail: 'Écris d\'abord ton adresse e-mail.', errInvalidEmail: 'Adresse e-mail invalide.', errWeak: 'Le mot de passe doit avoir au moins 6 caractères.', errInUse: 'Un compte existe déjà avec cet e-mail. Connecte-toi.', errWrong: 'E-mail ou mot de passe incorrect.', errTooMany: 'Trop d\'essais. Attends quelques minutes et réessaie.', errEmail: 'Erreur. Réessaie dans un moment.', connecting: 'Connexion...', error: 'Erreur de connexion. Ouvre ce site dans ton navigateur (Safari/Chrome) et réessaie.', diaspora: 'Diaspora', meetings: 'Rencontres', chat: 'Chat', browserTip: '💡 Pour une meilleure expérience, ouvre ce lien dans Safari ou Chrome' },
+    en: { title: 'The dating app for Burundians around the world', community: 'Join the Urukundo community', google: 'Continue with Google', or: 'or', email: 'Email', password: 'Password', login: 'Log in', signup: 'Create my account', toSignup: 'No account yet? Create one here', toLogin: 'Already have an account? Log in', forgot: 'Forgot password?', resetSent: 'Email sent! Check your inbox (and spam) to choose a new password.', needEmail: 'Enter your email address first.', errInvalidEmail: 'Invalid email address.', errWeak: 'Password must be at least 6 characters.', errInUse: 'An account already exists with this email. Log in.', errWrong: 'Wrong email or password.', errTooMany: 'Too many attempts. Wait a few minutes and try again.', errEmail: 'Error. Try again in a moment.', connecting: 'Connecting...', error: 'Connection error. Open this site in your browser (Safari/Chrome) and try again.', diaspora: 'Diaspora', meetings: 'Dating', chat: 'Chat', browserTip: '💡 For a better experience, open this link in Safari or Chrome' }
   };
   const t = T[lang];
 
@@ -54,20 +58,51 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
     setLoadingProvider(null);
   };
 
-  const handleFacebookLogin = async () => {
-    if (isWebView || isStandalone) {
-      window.open(window.location.href, '_blank');
-      return;
+  const emailErrorMessage = (code: string) => {
+    switch (code) {
+      case 'auth/invalid-email': return t.errInvalidEmail;
+      case 'auth/weak-password': return t.errWeak;
+      case 'auth/email-already-in-use': return t.errInUse;
+      case 'auth/invalid-credential':
+      case 'auth/wrong-password':
+      case 'auth/user-not-found': return t.errWrong;
+      case 'auth/too-many-requests': return t.errTooMany;
+      default: return `${t.errEmail} (${code || 'erreur inconnue'})`;
     }
-    setLoadingProvider('facebook');
+  };
+
+  // Contrairement à Google, l'e-mail ne passe par aucune popup/redirect : ça marche aussi
+  // dans l'app installée et dans les webviews, sans devoir ouvrir le navigateur.
+  const handleEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoadingProvider('email');
     setError('');
+    setInfo('');
     try {
-      await signInWithPopup(auth, facebookProvider);
+      if (emailMode === 'signup') {
+        const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        sendEmailVerification(cred.user).catch(err => console.error('sendEmailVerification error', err));
+      } else {
+        await signInWithEmailAndPassword(auth, email.trim(), password);
+      }
     } catch (err: any) {
       console.error(err);
-      setError(`${t.error} (${err?.code || 'erreur inconnue'})`);
+      setError(emailErrorMessage(err?.code));
     }
     setLoadingProvider(null);
+  };
+
+  const handleForgotPassword = async () => {
+    setError('');
+    setInfo('');
+    if (!email.trim()) { setError(t.needEmail); return; }
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      setInfo(t.resetSent);
+    } catch (err: any) {
+      console.error(err);
+      setError(emailErrorMessage(err?.code));
+    }
   };
 
   return (
@@ -122,15 +157,39 @@ const LoginScreen: React.FC<Props> = ({ onLangSelect, lang }) => {
           {loadingProvider === 'google' ? t.connecting : t.google}
         </button>
 
-        <button onClick={handleFacebookLogin} disabled={loadingProvider !== null}
-          className="w-full py-4 px-6 bg-[#1877F2] rounded-2xl flex items-center justify-center gap-3 font-semibold text-white hover:bg-[#166FE5] transition-all active:scale-95 disabled:opacity-50 shadow-sm">
-          {loadingProvider === 'facebook' ? (
-            <i className="fa-solid fa-spinner fa-spin text-white"></i>
-          ) : (
-            <i className="fa-brands fa-facebook text-xl"></i>
+        <div className="flex items-center gap-3 text-gray-400 text-sm">
+          <div className="flex-1 h-px bg-gray-200"></div>{t.or}<div className="flex-1 h-px bg-gray-200"></div>
+        </div>
+
+        {info && <div className="bg-green-50 text-green-700 text-sm p-3 rounded-xl text-center">{info}</div>}
+
+        <form onSubmit={handleEmailSubmit} className="space-y-3">
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+            autoComplete="email" placeholder={t.email}
+            className="w-full py-3.5 px-5 border-2 border-gray-200 rounded-2xl text-gray-800 focus:border-red-400 focus:outline-none" />
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}
+            autoComplete={emailMode === 'signup' ? 'new-password' : 'current-password'} placeholder={t.password}
+            className="w-full py-3.5 px-5 border-2 border-gray-200 rounded-2xl text-gray-800 focus:border-red-400 focus:outline-none" />
+          <button type="submit" disabled={loadingProvider !== null}
+            className="w-full py-4 px-6 bg-red-500 rounded-2xl flex items-center justify-center gap-3 font-semibold text-white hover:bg-red-600 transition-all active:scale-95 disabled:opacity-50 shadow-sm">
+            {loadingProvider === 'email' ? (
+              <i className="fa-solid fa-spinner fa-spin text-white"></i>
+            ) : (
+              <i className="fa-solid fa-envelope text-lg"></i>
+            )}
+            {loadingProvider === 'email' ? t.connecting : (emailMode === 'signup' ? t.signup : t.login)}
+          </button>
+        </form>
+
+        <div className="flex flex-col items-center gap-2 text-sm">
+          <button onClick={() => { setEmailMode(emailMode === 'login' ? 'signup' : 'login'); setError(''); setInfo(''); }}
+            className="text-red-500 font-semibold">
+            {emailMode === 'login' ? t.toSignup : t.toLogin}
+          </button>
+          {emailMode === 'login' && (
+            <button onClick={handleForgotPassword} className="text-gray-500">{t.forgot}</button>
           )}
-          {loadingProvider === 'facebook' ? t.connecting : t.facebook}
-        </button>
+        </div>
 
         {(isIOS || isWebView) && (
           <p className="text-xs text-gray-400 text-center">
