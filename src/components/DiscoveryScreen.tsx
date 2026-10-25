@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { cloudinaryUrl } from '../services/cloudinaryService';
+import { activityStatus, relationshipGoalLabel } from '../services/profileDetails';
+import ProfileDetailModal from './ProfileDetailModal';
 
 interface Props {
   profiles: UserProfile[];
@@ -17,7 +19,7 @@ interface Props {
   onReport?: (profile: UserProfile, reason: string) => void;
   onBlock?: (profile: UserProfile) => void;
   canSuperLike?: () => boolean;
-  onSuperLike?: (profile: UserProfile) => void;
+  onSuperLike?: (profile: UserProfile, note?: string) => void;
   boostActive?: boolean;
   onBoost?: () => boolean;
 }
@@ -38,6 +40,9 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
   const [showSuperLikePaywall, setShowSuperLikePaywall] = useState(false);
   const [showBoostPaywall, setShowBoostPaywall] = useState(false);
   const [boostToast, setBoostToast] = useState<string | null>(null);
+  const [showDetail, setShowDetail] = useState(false);
+  const [superLikeNoteFor, setSuperLikeNoteFor] = useState<UserProfile | null>(null);
+  const [superLikeNote, setSuperLikeNote] = useState('');
 
   const startX = useRef(0);
   const animating = useRef(false);
@@ -67,6 +72,8 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
       boostBody: "Tu as déjà utilisé ton Boost gratuit du jour (ou il est encore actif). Reviens demain ou passe Premium pour un accès illimité.",
       boostOn: 'Boost activé pendant 30 minutes ⚡', boostRunning: 'Boost déjà actif ⚡',
       undoLast: 'Annuler mon dernier swipe',
+      superNoteTitle: '⭐ Super Like', superNoteBody: (name: string) => `Ajoute un petit mot pour ${name} (optionnel) : il le verra avec ton Super Like.`,
+      superNotePlaceholder: 'Ex : Ton sourire m\'a fait craquer 😊', superNoteSend: 'Envoyer le Super Like', moreInfo: 'Voir le profil',
     },
     en: {
       noMore: 'No more profiles', comeback: 'Come back later!', reload: 'Reload', online: 'Online',
@@ -84,6 +91,8 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
       boostBody: "You've already used your free daily Boost (or it's still active). Come back tomorrow or go Premium for unlimited access.",
       boostOn: 'Boost activated for 30 minutes ⚡', boostRunning: 'Boost already active ⚡',
       undoLast: 'Undo my last swipe',
+      superNoteTitle: '⭐ Super Like', superNoteBody: (name: string) => `Add a short note for ${name} (optional): they'll see it with your Super Like.`,
+      superNotePlaceholder: 'E.g. Your smile got me 😊', superNoteSend: 'Send Super Like', moreInfo: 'View profile',
     }
   };
   const t = T[lang];
@@ -154,13 +163,24 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
     }, 350);
   };
 
+  // Comme Tinder : on peut joindre un message au Super Like avant de l'envoyer.
   const triggerSuperLike = (profile: UserProfile) => {
     if (animating.current) return;
     if (canSuperLike && !canSuperLike()) { setShowSuperLikePaywall(true); return; }
+    setSuperLikeNote('');
+    setSuperLikeNoteFor(profile);
+  };
+
+  const sendSuperLike = () => {
+    const profile = superLikeNoteFor;
+    if (!profile || animating.current) return;
+    const note = superLikeNote.trim();
+    setSuperLikeNoteFor(null);
+    setShowDetail(false);
     animating.current = true;
     setSwipeAnim('super');
     setTimeout(() => {
-      onSuperLike?.(profile);
+      onSuperLike?.(profile, note || undefined);
       resetCardState();
       animating.current = false;
     }, 350);
@@ -274,6 +294,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
   if (!currentProfile) return <div className="h-full bg-white" />;
 
   const photos = currentProfile.images?.length > 0 ? currentProfile.images : [];
+  const activity = activityStatus(currentProfile, lang);
   const cardTranslateX = swipeAnim === 'like' ? 600 : swipeAnim === 'nope' ? -600 : dragX;
   const cardTranslateY = swipeAnim === 'super' ? -700 : 0;
   const cardRotation = swipeAnim === 'like' ? 35 : swipeAnim === 'nope' ? -35 : dragX * 0.06;
@@ -488,6 +509,14 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
               </span>
             </div>
 
+            <button
+              onClick={() => setShowDetail(true)}
+              title={t.moreInfo}
+              className="absolute bottom-5 right-4 z-20 w-9 h-9 rounded-full bg-white/90 text-gray-800 shadow flex items-center justify-center"
+            >
+              <i className="fa-solid fa-arrow-up"></i>
+            </button>
+
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-5 text-white pointer-events-none">
               <div className="flex items-baseline gap-2 flex-wrap">
                 <h2 className="text-2xl font-bold flex items-center gap-1.5">
@@ -496,9 +525,11 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
                     <i className="fa-solid fa-circle-check text-blue-400 text-base" title="Identité vérifiée"></i>
                   )}
                 </h2>
-                <span className="flex items-center gap-1 text-xs bg-green-500/80 px-2 py-0.5 rounded-full">
-                  <i className="fa-solid fa-circle text-[6px]"></i> {t.online}
-                </span>
+                {activity && (
+                  <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${activity.online ? 'bg-green-500/80' : 'bg-white/20'}`}>
+                    <i className="fa-solid fa-circle text-[6px]"></i> {activity.label}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2 mt-1 opacity-90 text-xs">
                 <i className="fa-solid fa-location-dot"></i>
@@ -512,7 +543,12 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-xs line-clamp-2 opacity-80">{currentProfile.bio}</p>
+              {currentProfile.details?.relationshipGoal && (
+                <span className="inline-block mt-1.5 text-xs bg-red-500/80 px-2 py-0.5 rounded-full font-medium">
+                  {relationshipGoalLabel(currentProfile.details.relationshipGoal, lang)}
+                </span>
+              )}
+              <p className="mt-1 text-xs line-clamp-2 opacity-80 pr-10">{currentProfile.bio}</p>
               <div className="flex flex-wrap gap-1 mt-2">
                 {currentProfile.interests?.slice(0, 3).map(i => (
                   <span key={i} className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
@@ -573,6 +609,32 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
         <div className="fixed bottom-24 left-0 right-0 flex justify-center z-50 pointer-events-none">
           <div className="bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-full shadow-lg">
             {boostToast}
+          </div>
+        </div>
+      )}
+
+      {showDetail && currentProfile && (
+        <ProfileDetailModal
+          profile={currentProfile}
+          lang={lang}
+          onClose={() => setShowDetail(false)}
+          onLike={() => { setShowDetail(false); triggerLike(currentProfile); }}
+          onDislike={() => { setShowDetail(false); triggerDislike(currentProfile.id); }}
+        />
+      )}
+
+      {superLikeNoteFor && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setSuperLikeNoteFor(null)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-3" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-purple-600">{t.superNoteTitle}</h3>
+            <p className="text-sm text-gray-500">{t.superNoteBody(superLikeNoteFor.name)}</p>
+            <textarea autoFocus value={superLikeNote} onChange={e => setSuperLikeNote(e.target.value)} maxLength={140}
+              placeholder={t.superNotePlaceholder}
+              className="w-full p-3 bg-gray-50 rounded-2xl text-sm min-h-[80px] focus:outline-none focus:ring-2 focus:ring-purple-200" />
+            <button onClick={sendSuperLike} className="w-full py-3 bg-purple-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2">
+              <i className="fa-solid fa-star"></i> {t.superNoteSend}
+            </button>
+            <button onClick={() => setSuperLikeNoteFor(null)} className="w-full py-2 text-sm text-gray-400">{t.cancel}</button>
           </div>
         </div>
       )}

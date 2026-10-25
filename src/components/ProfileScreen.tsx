@@ -3,7 +3,8 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { uploadImage, cloudinaryUrl } from '../services/cloudinaryService';
 import { moderateImage, verifyIdentitySelfie } from '../services/geminiService';
-import { UserProfile, ChatSession } from '../types';
+import { UserProfile, ChatSession, ProfileDetails } from '../types';
+import { RELATIONSHIP_GOALS, RELIGIONS, LANGUAGES, SMOKING, DRINKING, CHILDREN, EDUCATION, ALL_INTERESTS, relationshipGoalLabel } from '../services/profileDetails';
 import DiscoverySettingsScreen from './DiscoverySettingsScreen';
 import SafetyScreen from './SafetyScreen';
 import AIAssistantScreen from './AIAssistantScreen';
@@ -26,6 +27,27 @@ const PROMPT_QUESTIONS = [
   "Un talent caché",
 ];
 
+type DetailField = {
+  key: keyof ProfileDetails;
+  label: string;
+  icon: string;
+  kind: 'choice' | 'multi' | 'text' | 'number';
+  options?: string[];
+};
+
+// Rubriques "Je cherche / Essentiels / Mode de vie" façon Tinder.
+const DETAIL_FIELDS: DetailField[] = [
+  { key: 'relationshipGoal', label: 'Je cherche', icon: 'fa-heart', kind: 'choice', options: RELATIONSHIP_GOALS.map(g => g.value) },
+  { key: 'height', label: 'Taille (cm)', icon: 'fa-ruler-vertical', kind: 'number' },
+  { key: 'job', label: 'Métier', icon: 'fa-briefcase', kind: 'text' },
+  { key: 'education', label: 'Études', icon: 'fa-graduation-cap', kind: 'choice', options: EDUCATION },
+  { key: 'religion', label: 'Religion', icon: 'fa-hands-praying', kind: 'choice', options: RELIGIONS },
+  { key: 'languages', label: 'Langues parlées', icon: 'fa-language', kind: 'multi', options: LANGUAGES },
+  { key: 'children', label: 'Enfants', icon: 'fa-baby', kind: 'choice', options: CHILDREN },
+  { key: 'smoking', label: 'Tabac', icon: 'fa-smoking', kind: 'choice', options: SMOKING },
+  { key: 'drinking', label: 'Alcool', icon: 'fa-wine-glass', kind: 'choice', options: DRINKING },
+];
+
 const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lang }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -34,6 +56,11 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
   const [activePhoto, setActivePhoto] = useState(0);
   const [showPromptPicker, setShowPromptPicker] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<{ index: number; question: string; answer: string } | null>(null);
+  const [editingDetail, setEditingDetail] = useState<DetailField | null>(null);
+  const [detailDraft, setDetailDraft] = useState<string>('');
+  const [multiDraft, setMultiDraft] = useState<string[]>([]);
+  const [editingInterests, setEditingInterests] = useState(false);
+  const [interestsDraft, setInterestsDraft] = useState<string[]>([]);
 
   if (subScreen === 'discovery') return <DiscoverySettingsScreen user={user} setUser={setUser} onBack={() => setSubScreen('main')} />;
   if (subScreen === 'safety') return <SafetyScreen userId={user.id} onBack={() => setSubScreen('main')} onSignOut={onSignOut} />;
@@ -106,6 +133,51 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
     const prompts = (user.prompts || []).filter((_, i) => i !== index);
     setUser(prev => prev ? { ...prev, prompts } : null);
     try { await updateDoc(doc(db, 'users', user.id), { prompts }); } catch {}
+  };
+
+  const saveDetails = async (details: ProfileDetails) => {
+    setUser(prev => prev ? { ...prev, details } : null);
+    try { await updateDoc(doc(db, 'users', user.id), { details }); } catch {}
+  };
+
+  const openDetail = (field: DetailField) => {
+    const current = user.details?.[field.key];
+    if (field.kind === 'multi') setMultiDraft(Array.isArray(current) ? current : []);
+    else setDetailDraft(current !== undefined ? String(current) : '');
+    setEditingDetail(field);
+  };
+
+  const commitDetail = (value: string | number | string[] | undefined) => {
+    if (!editingDetail) return;
+    const details: ProfileDetails = { ...(user.details || {}) };
+    const empty = value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+    if (empty) delete details[editingDetail.key];
+    else (details as any)[editingDetail.key] = value;
+    setEditingDetail(null);
+    saveDetails(details);
+  };
+
+  const detailValueLabel = (field: DetailField): string => {
+    const v = user.details?.[field.key];
+    if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) return '';
+    if (field.key === 'relationshipGoal') return relationshipGoalLabel(String(v));
+    if (field.key === 'height') return `${v} cm`;
+    return Array.isArray(v) ? v.join(', ') : String(v);
+  };
+
+  const handleSaveInterests = async () => {
+    if (interestsDraft.length < 3) { alert('Choisis au moins 3 passions.'); return; }
+    setUser(prev => prev ? { ...prev, interests: interestsDraft } : null);
+    setEditingInterests(false);
+    try { await updateDoc(doc(db, 'users', user.id), { interests: interestsDraft }); } catch {}
+  };
+
+  // Mode pause (le "Snooze" de Tinder) : le profil disparaît de la découverte,
+  // mais les matchs et conversations existants continuent de fonctionner.
+  const handleTogglePause = async () => {
+    const hidden = !user.hidden;
+    setUser(prev => prev ? { ...prev, hidden } : null);
+    try { await updateDoc(doc(db, 'users', user.id), { hidden }); } catch {}
   };
 
   const handleSelfieCapture = async (blob: Blob) => {
@@ -215,8 +287,39 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
           <i className="fa-solid fa-share-nodes"></i> INVITER DES AMIS
         </button>
 
+        {user.hidden && (
+          <div className="p-4 bg-yellow-50 border border-yellow-100 rounded-2xl text-sm text-yellow-700 flex items-start gap-3">
+            <i className="fa-solid fa-pause mt-0.5"></i>
+            <span>Ton profil est en pause : personne de nouveau ne peut te voir. Tes matchs et messages continuent de marcher.</span>
+          </div>
+        )}
+
         <div>
-          <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-3">Centres d'intérêt</label>
+          <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-3">Mes infos</label>
+          <div className="bg-gray-50 rounded-2xl overflow-hidden divide-y divide-gray-100">
+            {DETAIL_FIELDS.map(field => {
+              const value = detailValueLabel(field);
+              return (
+                <button key={field.key} onClick={() => openDetail(field)}
+                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-100 text-left">
+                  <i className={`fa-solid ${field.icon} text-gray-400 w-4 text-center`}></i>
+                  <span className="text-sm text-gray-700 flex-1">{field.label}</span>
+                  <span className={`text-xs truncate max-w-[50%] ${value ? 'text-gray-500' : 'text-red-400 font-medium'}`}>{value || 'Ajouter'}</span>
+                  <i className="fa-solid fa-chevron-right text-gray-300 text-xs"></i>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Centres d'intérêt</label>
+            <button onClick={() => { setInterestsDraft(user.interests || []); setEditingInterests(true); }}
+              className="text-xs text-red-500 font-medium flex items-center gap-1">
+              <i className="fa-solid fa-pen text-[10px]"></i> Modifier
+            </button>
+          </div>
           <div className="flex flex-wrap gap-2">
             {(user.interests || []).map(i => (
               <span key={i} className="px-4 py-1.5 bg-red-50 text-red-600 rounded-full text-xs font-medium border border-red-100">{i}</span>
@@ -283,6 +386,19 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
               <div className="w-5 h-5 bg-white rounded-full shadow"></div>
             </div>
           </button>
+          <button onClick={handleTogglePause}
+            className="w-full p-4 flex justify-between items-center hover:bg-gray-100">
+            <div className="flex items-center gap-3">
+              <i className="fa-solid fa-pause text-yellow-500"></i>
+              <div className="text-left">
+                <span className="text-sm text-gray-700 block">Mettre mon profil en pause</span>
+                <span className="text-[10px] text-gray-400">Invisible dans la découverte, tes matchs restent</span>
+              </div>
+            </div>
+            <div className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors flex-shrink-0 ${user.hidden ? 'bg-yellow-500 justify-end' : 'bg-gray-300 justify-start'}`}>
+              <div className="w-5 h-5 bg-white rounded-full shadow"></div>
+            </div>
+          </button>
           <button onClick={() => setSubScreen('ai')}
             className="w-full p-4 flex justify-between items-center hover:bg-gray-100">
             <div className="flex items-center gap-3">
@@ -325,6 +441,88 @@ const ProfileScreen: React.FC<Props> = ({ user, setUser, onSignOut, matches, lan
               </button>
             ))}
             <button onClick={() => setShowPromptPicker(false)} className="w-full py-2 text-sm text-gray-400">Annuler</button>
+          </div>
+        </div>
+      )}
+
+      {editingDetail && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setEditingDetail(null)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-2 max-h-[75vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <i className={`fa-solid ${editingDetail.icon} text-red-400`}></i> {editingDetail.label}
+            </h3>
+            {editingDetail.kind === 'choice' && editingDetail.options!.map(opt => {
+              const selected = String(user.details?.[editingDetail.key] ?? '') === opt;
+              return (
+                <button key={opt} onClick={() => commitDetail(selected ? undefined : opt)}
+                  className={`w-full py-3 px-4 rounded-xl text-left text-sm ${selected ? 'bg-red-500 text-white' : 'bg-gray-50 hover:bg-gray-100 text-gray-700'}`}>
+                  {editingDetail.key === 'relationshipGoal' ? relationshipGoalLabel(opt) : opt}
+                </button>
+              );
+            })}
+            {editingDetail.kind === 'multi' && (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {editingDetail.options!.map(opt => {
+                    const selected = multiDraft.includes(opt);
+                    return (
+                      <button key={opt} onClick={() => setMultiDraft(prev => selected ? prev.filter(o => o !== opt) : [...prev, opt])}
+                        className={`px-4 py-2 rounded-full text-sm border ${selected ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-700 border-gray-200'}`}>
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button onClick={() => commitDetail(multiDraft)} className="w-full mt-3 py-3 bg-red-500 text-white rounded-2xl font-bold text-sm">Enregistrer</button>
+              </>
+            )}
+            {(editingDetail.kind === 'text' || editingDetail.kind === 'number') && (
+              <>
+                <input autoFocus value={detailDraft} onChange={e => setDetailDraft(e.target.value)}
+                  type={editingDetail.kind === 'number' ? 'number' : 'text'}
+                  inputMode={editingDetail.kind === 'number' ? 'numeric' : undefined}
+                  min={editingDetail.kind === 'number' ? 120 : undefined} max={editingDetail.kind === 'number' ? 230 : undefined}
+                  maxLength={60}
+                  placeholder={editingDetail.kind === 'number' ? 'Ex : 175' : 'Ex : Infirmière, Étudiant, Entrepreneur...'}
+                  className="w-full p-4 bg-gray-50 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-red-200" />
+                <button
+                  onClick={() => {
+                    if (editingDetail.kind === 'number') {
+                      const n = parseInt(detailDraft, 10);
+                      if (detailDraft && (isNaN(n) || n < 120 || n > 230)) { alert('Indique une taille entre 120 et 230 cm.'); return; }
+                      commitDetail(detailDraft ? n : undefined);
+                    } else commitDetail(detailDraft.trim());
+                  }}
+                  className="w-full py-3 bg-red-500 text-white rounded-2xl font-bold text-sm">Enregistrer</button>
+              </>
+            )}
+            <button onClick={() => setEditingDetail(null)} className="w-full py-2 text-sm text-gray-400">Annuler</button>
+          </div>
+        </div>
+      )}
+
+      {editingInterests && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setEditingInterests(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-3 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-800">Mes passions</h3>
+            <p className="text-xs text-gray-400">{interestsDraft.length}/5 · choisis-en entre 3 et 5</p>
+            <div className="flex flex-wrap gap-2">
+              {ALL_INTERESTS.map(i => {
+                const selected = interestsDraft.includes(i);
+                const full = !selected && interestsDraft.length >= 5;
+                return (
+                  <button key={i} disabled={full}
+                    onClick={() => setInterestsDraft(prev => selected ? prev.filter(x => x !== i) : [...prev, i])}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border ${selected ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-700 border-gray-200'} ${full ? 'opacity-40' : ''}`}>
+                    {i}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setEditingInterests(false)} className="flex-1 py-3 text-sm text-gray-400 font-medium">Annuler</button>
+              <button onClick={handleSaveInterests} className="flex-1 py-3 bg-red-500 text-white rounded-2xl font-bold text-sm">Enregistrer</button>
+            </div>
           </div>
         </div>
       )}

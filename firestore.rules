@@ -33,7 +33,7 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid in chatId.split('_');
       allow create: if request.auth != null && request.auth.uid in chatId.split('_') &&
         request.auth.uid == request.resource.data.senderId;
-      // Suppression façon WhatsApp : "pour moi" (n'importe quel participant
+      // Réactions emoji et suppression façon WhatsApp : "pour moi" (n'importe quel participant
       // ajoute juste son propre uid à deletedFor) ou "pour tout le monde"
       // (seul l'auteur du message peut le faire). Le contenu du message
       // (texte/audio/expéditeur/date) ne peut jamais être modifié.
@@ -52,6 +52,13 @@ service cloud.firestore {
             request.auth.uid == resource.data.senderId &&
             request.resource.data.deletedForEveryone == true &&
             request.resource.data.get('deletedFor', []) == resource.data.get('deletedFor', [])
+          ) ||
+          // Réaction emoji : chaque participant ne touche qu'à sa propre clé
+          // dans "reactions", rien d'autre dans le message.
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) &&
+            request.resource.data.reactions is map &&
+            request.resource.data.reactions.diff(resource.data.get('reactions', {})).affectedKeys().hasOnly([request.auth.uid])
           )
         );
     }

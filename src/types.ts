@@ -29,6 +29,20 @@ export interface UserProfile {
   boostedUntil?: number;
   fcmTokens?: string[];
   aiConsent?: boolean;
+  details?: ProfileDetails;
+}
+
+// Infos "Essentiels / Mode de vie / Je cherche" façon Tinder, toutes optionnelles.
+export interface ProfileDetails {
+  relationshipGoal?: string;
+  height?: number;
+  job?: string;
+  education?: string;
+  religion?: string;
+  languages?: string[];
+  smoking?: string;
+  drinking?: string;
+  children?: string;
 }
 
 export interface Message {
@@ -38,6 +52,7 @@ export interface Message {
   timestamp: number;
   deletedFor?: string[];
   deletedForEveryone?: boolean;
+  reactions?: Record<string, string>;
 }
 
 export interface ChatSession {

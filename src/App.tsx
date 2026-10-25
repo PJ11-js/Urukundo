@@ -42,6 +42,7 @@ const App: React.FC = () => {
   const likesUnsubRef = useRef<(() => void) | null>(null);
   const [lastSwipe, setLastSwipe] = useState<{ profile: UserProfile; likeDocId?: string; prevSuperLikeAt?: number } | null>(null);
   const [incomingCall, setIncomingCall] = useState<{ id: string; callerId: string; type: 'audio' | 'video'; offer?: any; callerProfile: UserProfile } | null>(null);
+  const [matchCelebration, setMatchCelebration] = useState<UserProfile | null>(null);
   const [activeCall, setActiveCall] = useState<{ callId: string; partner: UserProfile; type: 'audio' | 'video'; role: 'caller' | 'callee'; offer?: any } | null>(null);
 
   const handleLangSelect = (l: 'fr' | 'en') => {
@@ -52,6 +53,18 @@ const App: React.FC = () => {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // Statut "En ligne" / "Actif récemment" fiable : on rafraîchit lastSeen
+  // toutes les 5 min tant que l'app est au premier plan, et on passe hors
+  // ligne quand elle part en arrière-plan (beforeunload ne marche pas sur mobile).
+  useEffect(() => {
+    if (!user) return;
+    const ping = (isOnline: boolean) => updateDoc(doc(db, 'users', user.uid), { isOnline, lastSeen: Date.now() }).catch(() => {});
+    const onVisibility = () => ping(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', onVisibility);
+    const interval = window.setInterval(() => { if (document.visibilityState === 'visible') ping(true); }, 5 * 60 * 1000);
+    return () => { document.removeEventListener('visibilitychange', onVisibility); clearInterval(interval); };
+  }, [user]);
 
   const handleThemeChange = (t: Theme) => {
     setTheme(t);
@@ -283,7 +296,7 @@ const App: React.FC = () => {
     return !last || Date.now() - last > 24 * 60 * 60 * 1000;
   };
 
-  const handleSuperLike = (profile: UserProfile) => {
+  const handleSuperLike = (profile: UserProfile, note?: string) => {
     if (!user || !currentUser) return;
     const now = Date.now();
     const prevSuperLikeAt = currentUser.lastSuperLikeAt;
@@ -297,12 +310,13 @@ const App: React.FC = () => {
     if (!alreadyMatched) {
       (async () => {
         try {
-          const ref = await addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp(), type: 'super' });
+          const ref = await addDoc(collection(db, 'likes'), { fromUserId: user.uid, toUserId: profile.id, timestamp: serverTimestamp(), type: 'super', ...(note ? { note } : {}) });
           setLastSwipe(prev => prev && prev.profile.id === profile.id ? { ...prev, likeDocId: ref.id } : prev);
           const q = query(collection(db, 'likes'), where('fromUserId', '==', profile.id), where('toUserId', '==', user.uid));
           const snap = await getDocs(q);
           if (!snap.empty) {
             await createMatch(user.uid, profile);
+            setMatchCelebration(profile);
             // Un match s'est formé : on ne permet plus d'annuler ce swipe.
             setLastSwipe(prev => prev && prev.profile.id === profile.id ? null : prev);
           }
@@ -339,6 +353,7 @@ const App: React.FC = () => {
         const snap = await getDocs(q);
         if (!snap.empty) {
           await createMatch(user.uid, profile);
+          setMatchCelebration(profile);
           // Un match s'est formé : on ne permet plus d'annuler ce swipe.
           setLastSwipe(prev => prev && prev.profile.id === profile.id ? null : prev);
         }
@@ -399,6 +414,7 @@ const App: React.FC = () => {
   const openChat = (session: ChatSession) => { setActiveChat(session); setCurrentScreen(AppScreen.CHAT); };
   const handleMatch = async (partner: UserProfile) => {
     if (user) await createMatch(user.uid, partner).catch(() => {});
+    setMatchCelebration(partner);
     setCurrentScreen(AppScreen.MESSAGES);
     setLikesCount(prev => Math.max(0, prev - 1));
   };
@@ -460,6 +476,41 @@ const App: React.FC = () => {
               <i className="fa-solid fa-phone"></i>
             </button>
           </div>
+        </div>
+      )}
+
+      {matchCelebration && user && (
+        <div className="absolute inset-0 z-50 bg-gradient-to-b from-red-600/95 to-green-700/95 flex flex-col items-center justify-center gap-6 text-white p-8 text-center">
+          <h2 className="text-4xl font-black italic tracking-tight" style={{ fontFamily: 'cursive' }}>
+            {lang === 'fr' ? "C'est un match !" : "It's a match!"}
+          </h2>
+          <p className="text-white/80 text-sm">
+            {lang === 'fr' ? `Toi et ${matchCelebration.name} vous êtes plu mutuellement 🇧🇮` : `You and ${matchCelebration.name} liked each other 🇧🇮`}
+          </p>
+          <div className="flex items-center -space-x-6">
+            {[currentUser, matchCelebration].map((p, i) => (
+              p?.images?.[0] ? (
+                <img key={i} src={cloudinaryUrl(p.images[0], 300, 300)} alt={p.name}
+                  className={`w-32 h-32 rounded-full object-cover border-4 border-white shadow-xl ${i === 0 ? '-rotate-6' : 'rotate-6'}`} />
+              ) : (
+                <div key={i} className={`w-32 h-32 rounded-full border-4 border-white bg-white/20 flex items-center justify-center text-4xl font-bold ${i === 0 ? '-rotate-6' : 'rotate-6'}`}>
+                  {p?.name?.[0] || '?'}
+                </div>
+              )
+            ))}
+          </div>
+          <button
+            onClick={() => {
+              const partner = matchCelebration;
+              setMatchCelebration(null);
+              openChat({ id: matchDocId(user.uid, partner.id), partner, messages: [] });
+            }}
+            className="w-full max-w-xs py-4 bg-white text-red-600 rounded-full font-bold shadow-lg">
+            <i className="fa-solid fa-comment mr-2"></i>{lang === 'fr' ? 'Envoyer un message' : 'Send a message'}
+          </button>
+          <button onClick={() => setMatchCelebration(null)} className="text-white/80 text-sm font-medium">
+            {lang === 'fr' ? 'Continuer à swiper' : 'Keep swiping'}
+          </button>
         </div>
       )}
 

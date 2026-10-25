@@ -7,6 +7,10 @@ import { notifyUser } from '../services/pushService';
 import { calculateDistance } from '../services/locationService';
 import { cloudinaryUrl, uploadAudio } from '../services/cloudinaryService';
 import LiveLocationMap from './LiveLocationMap';
+import ProfileDetailModal from './ProfileDetailModal';
+import { activityStatus } from '../services/profileDetails';
+
+const REACTIONS = ['❤️', '😂', '😮', '😢', '🙏🏾', '🔥'];
 
 interface Props {
   session: ChatSession;
@@ -34,6 +38,8 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   const [showUnmatchConfirm, setShowUnmatchConfirm] = useState(false);
   const [matchData, setMatchData] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; isMe: boolean } | null>(null);
+  const [showPartnerProfile, setShowPartnerProfile] = useState(false);
+  const lastTapRef = useRef<{ id: string; at: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pressTimerRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -272,6 +278,43 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
     setDeleteTarget(null);
   };
 
+  // Réactions emoji façon Tinder/WhatsApp : une seule par personne et par
+  // message ; re-choisir la même la retire.
+  const handleReact = async (messageId: string, emoji: string) => {
+    setDeleteTarget(null);
+    const current = messages.find(m => m.id === messageId)?.reactions?.[currentUserId];
+    try {
+      await updateDoc(doc(db, 'chats', chatId, 'messages', messageId), {
+        [`reactions.${currentUserId}`]: current === emoji ? deleteField() : emoji,
+      });
+    } catch (err) { console.error(err); }
+  };
+
+  // Double-tap sur une bulle = ❤️ (comme Tinder).
+  const handleBubbleTap = (msg: any) => {
+    const now = Date.now();
+    if (lastTapRef.current && lastTapRef.current.id === msg.id && now - lastTapRef.current.at < 300) {
+      lastTapRef.current = null;
+      handleReact(msg.id, '❤️');
+    } else {
+      lastTapRef.current = { id: msg.id, at: now };
+    }
+  };
+
+  const renderReactions = (msg: any, isMe: boolean) => {
+    const values = Object.values(msg.reactions || {}) as string[];
+    if (!values.length) return null;
+    const counts = values.reduce<Record<string, number>>((acc, e) => { acc[e] = (acc[e] || 0) + 1; return acc; }, {});
+    return (
+      <button onClick={() => setDeleteTarget({ id: msg.id, isMe })}
+        className="-mt-2 z-10 bg-white border border-gray-100 shadow-sm rounded-full px-1.5 py-0.5 text-xs flex items-center gap-0.5">
+        {Object.entries(counts).map(([e, n]) => <span key={e}>{e}{n > 1 ? <span className="text-[10px] text-gray-500 ml-0.5">{n}</span> : null}</span>)}
+      </button>
+    );
+  };
+
+  const partnerActivity = activityStatus(session.partner, lang);
+
   const handleAiWingman = async () => {
     setIsAiLoading(true);
     const suggestion = await getConversationStarter(session.partner.name, session.partner.interests, currentUserId, messages, lang);
@@ -295,17 +338,21 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
         <button onClick={onBack} className="text-gray-500 hover:text-red-500 p-1">
           <i className="fa-solid fa-chevron-left text-xl"></i>
         </button>
-        {session.partner.images?.[0] ? (
-          <img src={cloudinaryUrl(session.partner.images[0], 80, 80)} className="w-10 h-10 rounded-full object-cover" alt={session.partner.name} />
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-200 to-green-200 flex items-center justify-center">
-            <span className="text-white font-bold">{session.partner.name?.[0] || '?'}</span>
+        <button onClick={() => setShowPartnerProfile(true)} className="flex items-center gap-4 flex-1 min-w-0 text-left">
+          {session.partner.images?.[0] ? (
+            <img src={cloudinaryUrl(session.partner.images[0], 80, 80)} className="w-10 h-10 rounded-full object-cover flex-shrink-0" alt={session.partner.name} />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-200 to-green-200 flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-bold">{session.partner.name?.[0] || '?'}</span>
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <h4 className="font-bold text-gray-800 leading-none truncate">{session.partner.name}</h4>
+            {partnerActivity && (
+              <span className={`text-[10px] font-medium ${partnerActivity.online ? 'text-green-500' : 'text-gray-400'}`}>● {partnerActivity.label}</span>
+            )}
           </div>
-        )}
-        <div className="flex-1">
-          <h4 className="font-bold text-gray-800 leading-none">{session.partner.name}</h4>
-          <span className="text-[10px] text-green-500 font-medium">● {lang === 'fr' ? 'En ligne' : 'Online'}</span>
-        </div>
+        </button>
         {onStartCall && (
           <>
             <button onClick={() => onStartCall(session.partner, 'audio')}
@@ -404,9 +451,24 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
         </div>
       )}
 
+      {showPartnerProfile && (
+        <ProfileDetailModal profile={session.partner} lang={lang} onClose={() => setShowPartnerProfile(false)} />
+      )}
+
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setDeleteTarget(null)}>
           <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-2" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between pb-2">
+              {REACTIONS.map(e => {
+                const mine = messages.find(m => m.id === deleteTarget.id)?.reactions?.[currentUserId] === e;
+                return (
+                  <button key={e} onClick={() => handleReact(deleteTarget.id, e)}
+                    className={`w-11 h-11 rounded-full text-2xl flex items-center justify-center active:scale-90 transition-transform ${mine ? 'bg-red-100' : 'hover:bg-gray-100'}`}>
+                    {e}
+                  </button>
+                );
+              })}
+            </div>
             <button onClick={() => handleDeleteForMe(deleteTarget.id)}
               className="w-full py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-xl text-left text-sm text-gray-700">
               {t.deleteForMe}
@@ -476,8 +538,11 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
                     <i className="fa-solid fa-ellipsis-vertical text-sm"></i>
                   </button>
                 )}
-                <div className={`max-w-[75%] p-2 rounded-2xl ${isMe ? 'bg-red-500 rounded-br-none' : 'bg-white shadow-sm border border-gray-100 rounded-bl-none'}`}>
-                  <audio controls src={msg.audioUrl} style={{ width: 220, height: 32 }} />
+                <div className={`max-w-[75%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                  <div className={`p-2 rounded-2xl ${isMe ? 'bg-red-500 rounded-br-none' : 'bg-white shadow-sm border border-gray-100 rounded-bl-none'}`}>
+                    <audio controls src={msg.audioUrl} style={{ width: 220, height: 32 }} />
+                  </div>
+                  {renderReactions(msg, isMe)}
                 </div>
                 {!isMe && (
                   <button onClick={() => setDeleteTarget({ id: msg.id, isMe: false })}
@@ -493,9 +558,11 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
               <div
                 onMouseDown={() => startPress(msg)} onMouseUp={cancelPress} onMouseLeave={cancelPress}
                 onTouchStart={() => startPress(msg)} onTouchEnd={cancelPress} onTouchCancel={cancelPress}
+                onClick={() => handleBubbleTap(msg)}
                 className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm select-none ${isMe ? 'bg-red-500 text-white rounded-br-none' : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-bl-none'}`}>
                 {msg.text}
               </div>
+              {renderReactions(msg, isMe)}
               {isMe && isLast && (
                 <span className="text-[10px] text-gray-400 mt-0.5 px-1">
                   {partnerLastRead !== undefined && partnerLastRead >= msg.timestamp ? t.seen : t.sent}

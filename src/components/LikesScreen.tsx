@@ -3,6 +3,7 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, 
 import { db } from '../firebase';
 import { UserProfile } from '../types';
 import { cloudinaryUrl } from '../services/cloudinaryService';
+import ProfileDetailModal from './ProfileDetailModal';
 
 interface Props {
   currentUserId: string;
@@ -11,7 +12,8 @@ interface Props {
 }
 
 const LikesScreen: React.FC<Props> = ({ currentUserId, currentUserName, onMatch }) => {
-  const [likers, setLikers] = useState<(UserProfile & { isSuper?: boolean })[]>([]);
+  const [likers, setLikers] = useState<(UserProfile & { isSuper?: boolean; note?: string })[]>([]);
+  const [detail, setDetail] = useState<(UserProfile & { likeId: string }) | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,11 +21,11 @@ const LikesScreen: React.FC<Props> = ({ currentUserId, currentUserName, onMatch 
       try {
         const q = query(collection(db, 'likes'), where('toUserId', '==', currentUserId));
         const snapshot = await getDocs(q);
-        const likerIds = snapshot.docs.map(d => ({ likeId: d.id, fromUserId: d.data().fromUserId, isSuper: d.data().type === 'super' }));
-        const profiles: (UserProfile & { likeId: string; isSuper?: boolean })[] = [];
-        for (const { likeId, fromUserId, isSuper } of likerIds) {
+        const likerIds = snapshot.docs.map(d => ({ likeId: d.id, fromUserId: d.data().fromUserId, isSuper: d.data().type === 'super', note: d.data().note as string | undefined }));
+        const profiles: (UserProfile & { likeId: string; isSuper?: boolean; note?: string })[] = [];
+        for (const { likeId, fromUserId, isSuper, note } of likerIds) {
           const userSnap = await getDocs(query(collection(db, 'users'), where('id', '==', fromUserId)));
-          userSnap.forEach(d => profiles.push({ ...(d.data() as UserProfile), likeId, isSuper }));
+          userSnap.forEach(d => profiles.push({ ...(d.data() as UserProfile), likeId, isSuper, note }));
         }
         profiles.sort((a, b) => (b.isSuper ? 1 : 0) - (a.isSuper ? 1 : 0));
         setLikers(profiles);
@@ -83,9 +85,9 @@ const LikesScreen: React.FC<Props> = ({ currentUserId, currentUserName, onMatch 
           {likers.map(profile => (
             <div key={profile.id} className="relative rounded-2xl overflow-hidden shadow-sm bg-white border border-gray-100">
               {profile.images?.[0] ? (
-                <img src={cloudinaryUrl(profile.images[0], 420, 400)} className="w-full h-48 object-cover" alt={profile.name} />
+                <img src={cloudinaryUrl(profile.images[0], 420, 400)} onClick={() => setDetail(profile as any)} className="w-full h-48 object-cover cursor-pointer" alt={profile.name} />
               ) : (
-                <div className="w-full h-48 bg-gradient-to-br from-red-100 to-green-100 flex items-center justify-center">
+                <div onClick={() => setDetail(profile as any)} className="w-full h-48 bg-gradient-to-br from-red-100 to-green-100 flex items-center justify-center cursor-pointer">
                   <span className="text-5xl font-bold text-red-300">{profile.name?.[0] || '?'}</span>
                 </div>
               )}
@@ -97,6 +99,7 @@ const LikesScreen: React.FC<Props> = ({ currentUserId, currentUserName, onMatch 
               <div className="absolute bottom-12 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
                 <p className="text-white font-bold text-sm">{profile.name}, {profile.age}</p>
                 <p className="text-white/70 text-xs">📍 {profile.location}</p>
+                {profile.note && <p className="text-white text-xs italic mt-1 line-clamp-2">« {profile.note} »</p>}
               </div>
               <div className="flex border-t border-gray-100">
                 <button onClick={() => handleDislike(profile as any)}
@@ -111,6 +114,15 @@ const LikesScreen: React.FC<Props> = ({ currentUserId, currentUserName, onMatch 
             </div>
           ))}
         </div>
+      )}
+
+      {detail && (
+        <ProfileDetailModal
+          profile={detail}
+          onClose={() => setDetail(null)}
+          onLike={() => { const p = detail; setDetail(null); handleLikeBack(p); }}
+          onDislike={() => { const p = detail; setDetail(null); handleDislike(p); }}
+        />
       )}
 
       {likers.length > 0 && (
