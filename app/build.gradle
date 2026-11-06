@@ -21,10 +21,10 @@ plugins {
 }
 
 def twaManifest = [
-    applicationId: 'app.vercel.urukundo_2qq5.twa',
-    hostName: 'urukundo-2qq5.vercel.app', // The domain being opened in the TWA.
+    applicationId: 'com.urukundoapp.app',
+    hostName: 'urukundoapp.com', // The domain being opened in the TWA.
     launchUrl: '/', // The start path for the TWA. Must be relative to the domain.
-    name: 'Urukundo – Burundian Dating App', // The application name.
+    name: 'Urukundo', // The application name.
     launcherName: 'Urukundo', // The name shown on the Android Launcher.
     themeColor: '#CE1126', // The color used for the status bar.
     themeColorDark: '#000000', // The color used for the dark status bar.
@@ -52,13 +52,13 @@ def twaManifest = [
 
 android {
     compileSdkVersion 36
-    namespace "app.vercel.urukundo_2qq5.twa"
+    namespace "com.urukundoapp.app"
     defaultConfig {
-        applicationId "app.vercel.urukundo_2qq5.twa"
-        minSdkVersion 21
+        applicationId "com.urukundoapp.app"
+        minSdkVersion 23
         targetSdkVersion 35
         versionCode 1
-        versionName "1"
+        versionName "1.0.0"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name
@@ -76,12 +76,12 @@ android {
             // The URL the Web Manifest for the Progressive Web App that the TWA points to. This
             // is used by Chrome OS and Meta Quest to open the Web version of the PWA instead of
             // the TWA, as it will probably give a better user experience for non-mobile devices.
-            resValue "string", "webManifestUrl", 'https://urukundo-2qq5.vercel.app/manifest.json'
+            resValue "string", "webManifestUrl", 'https://urukundoapp.com/manifest.json'
         
 
         
             // This is used by Meta Quest.
-            resValue "string", "fullScopeUrl", 'https://urukundo-2qq5.vercel.app/'
+            resValue "string", "fullScopeUrl", 'https://urukundoapp.com/'
         
 
         
@@ -209,8 +209,6 @@ dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     
         implementation 'com.google.androidbrowserhelper:locationdelegation:1.1.2'
-    
-        implementation 'com.google.androidbrowserhelper:billing:1.1.0'
     
         implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.6.2'
     

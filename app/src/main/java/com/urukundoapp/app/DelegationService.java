@@ -1,9 +1,7 @@
-package app.vercel.urukundo_2qq5.twa;
+package com.urukundoapp.app;
 
 
 import com.google.androidbrowserhelper.locationdelegation.LocationDelegationExtraCommandHandler;
-
-import com.google.androidbrowserhelper.playbilling.digitalgoods.DigitalGoodsRequestHandler;
 
 
 public class DelegationService extends
@@ -14,8 +12,6 @@ public class DelegationService extends
 
         
             registerExtraCommandHandler(new LocationDelegationExtraCommandHandler());
-        
-            registerExtraCommandHandler(new DigitalGoodsRequestHandler(getApplicationContext()));
         
     }
 }

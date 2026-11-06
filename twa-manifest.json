@@ -1,7 +1,7 @@
 {
-  "packageId": "app.vercel.urukundo_2qq5.twa",
-  "host": "urukundo-2qq5.vercel.app",
-  "name": "Urukundo – Burundian Dating App",
+  "packageId": "com.urukundoapp.app",
+  "host": "urukundoapp.com",
+  "name": "Urukundo",
   "launcherName": "Urukundo",
   "display": "standalone",
   "themeColor": "#CE1126",
@@ -13,24 +13,21 @@
   "backgroundColor": "#FFFFFF",
   "enableNotifications": true,
   "startUrl": "/",
-  "iconUrl": "https://urukundo-2qq5.vercel.app/icon-512.png",
-  "maskableIconUrl": "https://urukundo-2qq5.vercel.app/icon-512.png",
-  "monochromeIconUrl": "https://urukundo-2qq5.vercel.app/icon-512.png",
+  "iconUrl": "https://urukundoapp.com/icon-512.png",
+  "maskableIconUrl": "https://urukundoapp.com/icon-512.png",
+  "monochromeIconUrl": "https://urukundoapp.com/icon-512.png",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
     "path": "android.keystore",
-    "alias": "android"
+    "alias": "urukundo"
   },
-  "appVersionName": "1",
+  "appVersionName": "1.0.0",
   "appVersionCode": 1,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "https://urukundo-2qq5.vercel.app/manifest.json",
+  "webManifestUrl": "https://urukundoapp.com/manifest.json",
   "fallbackType": "customtabs",
   "features": {
-    "playBilling": {
-      "enabled": true
-    },
     "locationDelegation": {
       "enabled": true
     }
@@ -41,8 +38,8 @@
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "fullScopeUrl": "https://urukundo-2qq5.vercel.app/",
-  "minSdkVersion": 21,
+  "fullScopeUrl": "https://urukundoapp.com/",
+  "minSdkVersion": 23,
   "orientation": "portrait",
   "fingerprints": [],
   "additionalTrustedOrigins": [],
@@ -51,5 +48,5 @@
   "fileHandlers": [],
   "launchHandlerClientMode": "",
   "displayOverride": [],
-  "appVersion": "1"
+  "appVersion": "1.0.0"
 }
