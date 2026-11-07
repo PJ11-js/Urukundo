@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { doc, deleteDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
-import { deleteUser } from 'firebase/auth';
+import { auth } from '../firebase';
+import { signOut } from 'firebase/auth';
 
 interface Props {
   userId: string;
@@ -17,8 +16,11 @@ const SafetyScreen: React.FC<Props> = ({ userId, onBack, onSignOut }) => {
   const handleDeleteAccount = async () => {
     setDeleting(true);
     try {
-      await deleteDoc(doc(db, 'users', userId));
-      if (auth.currentUser) await deleteUser(auth.currentUser);
+      // Suppression côté serveur : profil, matchs, messages, likes, photos… puis le compte.
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/delete-account', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(await res.text());
+      await signOut(auth).catch(() => {});
       onSignOut();
     } catch (err) {
       alert('Reconnecte-toi et réessaie.');
