@@ -69,6 +69,9 @@ export default async function handler(req: any, res: any) {
     const mediaDeleted = await deleteCloudinaryMedia(uid).catch(err => { console.error('cloudinary delete failed', err); return false; });
 
     await db.recursiveDelete(db.collection('users').doc(uid));
+    // Retirer aussi la fiche de la liste de découverte résumée (api/discovery.ts).
+    const cacheSnap = await db.collection('discoveryCache').get();
+    await Promise.all(cacheSnap.docs.map(d => d.ref.update({ [`profiles.${uid}`]: admin.firestore.FieldValue.delete() }).catch(() => {})));
     await admin.auth().deleteUser(uid);
 
     res.status(200).json({ deleted: true, mediaDeleted });

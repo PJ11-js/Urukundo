@@ -118,6 +118,17 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
     return () => unsub();
   }, [chatId]);
 
+  // Présence en direct du partenaire tant que la conversation est ouverte
+  // (1 lecture toutes les ~5 min, quand il met à jour sa présence).
+  const [partnerPresence, setPartnerPresence] = useState<Pick<UserProfile, 'isOnline' | 'lastSeen'> | null>(null);
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'users', session.partner.id), (snap) => {
+      const d = snap.data();
+      if (d) setPartnerPresence({ isOnline: d.isOnline, lastSeen: d.lastSeen });
+    }, () => {});
+    return () => unsub();
+  }, [session.partner.id]);
+
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'matches', chatId), (snap) => setMatchData(snap.data() || null), () => {});
     return () => unsub();
@@ -372,7 +383,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
     );
   };
 
-  const partnerActivity = activityStatus(session.partner, lang);
+  const partnerActivity = activityStatus({ ...session.partner, ...(partnerPresence || {}) }, lang);
 
   const handleAiWingman = async () => {
     setIsAiLoading(true);

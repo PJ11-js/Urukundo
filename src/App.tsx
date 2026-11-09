@@ -5,6 +5,7 @@ import { auth, db } from './firebase';
 import { AppScreen, UserProfile, ChatSession } from './types';
 import { getCurrentPosition, calculateDistance, reverseGeocode } from './services/locationService';
 import { registerPush, notifyUser } from './services/pushService';
+import { fetchDiscoveryProfiles, syncMyDiscoveryProfile, loadLikedIds, saveLikedIds } from './services/discoveryService';
 import LoginScreen from './components/LoginScreen';
 import LegalScreen from './components/LegalScreen';
 import SetupScreen from './components/SetupScreen';
@@ -37,6 +38,10 @@ const App: React.FC = () => {
   // Personnes à qui j'ai déjà envoyé un like (en attente de réponse) : on ne les
   // remontre pas dans la découverte, sinon un petit nombre de profils tourne en boucle.
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  // Profils déjà swipés pendant cette session (like ou non) : ne réapparaissent
+  // pas quand la liste est recalculée, seulement après "Recharger".
+  const swipedRef = useRef<Set<string>>(new Set());
+  const partnerCache = useRef<Map<string, { profile: UserProfile; at: number }>>(new Map());
   const [matches, setMatches] = useState<ChatSession[]>([]);
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [likesCount, setLikesCount] = useState(0);
@@ -126,20 +131,19 @@ const App: React.FC = () => {
 
   const loadProfiles = async (userId: string, coords: { lat: number; lng: number } | null, myGender?: string) => {
     try {
-      const [usersSnap, blockedByMeSnap, blockedMeSnap, sentLikesSnap] = await Promise.all([
-        getDocs(collection(db, 'users')),
+      const [allUsers, blockedByMeSnap, blockedMeSnap, sentLikes] = await Promise.all([
+        fetchDiscoveryProfiles(),
         getDocs(query(collection(db, 'blocks'), where('blockerId', '==', userId))).catch(() => ({ docs: [] } as any)),
         getDocs(query(collection(db, 'blocks'), where('blockedId', '==', userId))).catch(() => ({ docs: [] } as any)),
-        getDocs(query(collection(db, 'likes'), where('fromUserId', '==', userId))).catch(() => ({ docs: [] } as any)),
+        loadLikedIds(userId),
       ]);
-      setLikedIds(new Set<string>(sentLikesSnap.docs.map((d: any) => d.data().toUserId)));
+      setLikedIds(sentLikes);
       const blockedIds = new Set<string>([
         ...blockedByMeSnap.docs.map((d: any) => d.data().blockedId),
         ...blockedMeSnap.docs.map((d: any) => d.data().blockerId),
       ]);
       let realUsers: UserProfile[] = [];
-      usersSnap.forEach(d => {
-        const data = d.data() as UserProfile & { lat?: number; lng?: number };
+      allUsers.forEach(data => {
         if (data.id === userId) return;
         if (data.hidden) return;
         if (blockedIds.has(data.id)) return;
@@ -173,7 +177,7 @@ const App: React.FC = () => {
 
     // Déjà matché ou déjà liké -> plus besoin de le proposer.
     const matchedIds = new Set(matches.map(m => m.partner.id));
-    let filteredReal = allRealUsers.filter(u => !matchedIds.has(u.id) && !likedIds.has(u.id));
+    let filteredReal = allRealUsers.filter(u => !matchedIds.has(u.id) && !likedIds.has(u.id) && !swipedRef.current.has(u.id));
     if (lookingForGender) filteredReal = filteredReal.filter(u => !u.gender || u.gender === lookingForGender);
 
     if (settings) {
@@ -192,6 +196,11 @@ const App: React.FC = () => {
 
     setProfiles(filteredReal);
   }, [allRealUsers, countryFilter, currentUser?.gender, currentUser?.settings, matches, likedIds]);
+
+  // Garde ma fiche à jour dans la liste de découverte résumée (api/discovery.ts).
+  useEffect(() => {
+    if (user && currentUser?.name) syncMyDiscoveryProfile({ ...currentUser, id: user.uid });
+  }, [currentUser, user]);
 
   const handleCountrySearch = (country: string): boolean => {
     if (!currentUser?.isPremium) return false;
@@ -226,11 +235,22 @@ const App: React.FC = () => {
         const data = d.data() as any;
         const partnerId = (data.users as string[]).find(id => id !== user.uid);
         if (!partnerId) return null;
+        // Ce listener se déclenche à chaque message et à chaque "en train d'écrire" :
+        // on garde les profils des partenaires en mémoire 5 min au lieu de tous les
+        // relire à chaque fois (énorme économie de lectures Firestore).
         let partner: UserProfile | undefined;
-        try {
-          const pSnap = await getDoc(doc(db, 'users', partnerId));
-          if (pSnap.exists()) partner = pSnap.data() as UserProfile;
-        } catch {}
+        const cached = partnerCache.current.get(partnerId);
+        if (cached && Date.now() - cached.at < 5 * 60 * 1000) partner = cached.profile;
+        else {
+          try {
+            const pSnap = await getDoc(doc(db, 'users', partnerId));
+            if (pSnap.exists()) {
+              partner = { ...(pSnap.data() as UserProfile), id: partnerId };
+              partnerCache.current.set(partnerId, { profile: partner, at: Date.now() });
+            }
+          } catch {}
+          if (!partner && cached) partner = cached.profile;
+        }
         if (!partner) return null;
         const previewText = data.lastMessageText || (lang === 'fr' ? `C'est un match ! Amahoro ! 🇧🇮` : `It's a match! Amahoro! 🇧🇮`);
         const previewSenderId = data.lastMessageSenderId || partner.id;
@@ -334,6 +354,7 @@ const App: React.FC = () => {
     updateDoc(doc(db, 'users', user.uid), { lastSuperLikeAt: now }).catch(() => {});
 
     setProfiles(prev => refillProfiles(prev, profile.id));
+    rememberSwipe(profile.id, true);
     setLastSwipe({ profile, prevSuperLikeAt });
 
     const alreadyMatched = matches.some(m => m.partner.id === profile.id);
@@ -368,8 +389,17 @@ const App: React.FC = () => {
     return true;
   };
 
+  const rememberSwipe = (id: string, liked: boolean) => {
+    swipedRef.current.add(id);
+    if (liked && user) {
+      likedIds.add(id); // même Set que l'état : pas de recalcul de la pile
+      saveLikedIds(user.uid, likedIds);
+    }
+  };
+
   const handleLike = (profile: UserProfile) => {
     setProfiles(prev => refillProfiles(prev, profile.id));
+    rememberSwipe(profile.id, true);
     setLastSwipe({ profile });
     if (!user) return;
     const alreadyMatched = matches.some(m => m.partner.id === profile.id);
@@ -394,6 +424,7 @@ const App: React.FC = () => {
   const handleDislike = (profileId: string) => {
     const profile = profiles.find(p => p.id === profileId);
     if (profile) setLastSwipe({ profile });
+    rememberSwipe(profileId, false);
     setProfiles(prev => prev.filter(p => p.id !== profileId));
   };
 
@@ -404,6 +435,8 @@ const App: React.FC = () => {
     if (!lastSwipe) return;
     const { profile, likeDocId, prevSuperLikeAt } = lastSwipe;
     setProfiles(prev => [profile, ...prev]);
+    swipedRef.current.delete(profile.id);
+    if (user && likedIds.delete(profile.id)) saveLikedIds(user.uid, likedIds);
     if (likeDocId) deleteDoc(doc(db, 'likes', likeDocId)).catch(() => {});
     if (prevSuperLikeAt !== undefined && user) {
       setCurrentUser(prev => prev ? { ...prev, lastSuperLikeAt: prevSuperLikeAt } : prev);
@@ -414,7 +447,7 @@ const App: React.FC = () => {
 
   // Recharge la liste depuis le serveur (nouveaux inscrits), distinct du
   // "annuler le dernier swipe" ci-dessus.
-  const handleRefresh = () => { if (user) updateUserLocation(user.uid); };
+  const handleRefresh = () => { if (user) { swipedRef.current = new Set(); updateUserLocation(user.uid); } };
 
   const handleBlock = async (profile: UserProfile) => {
     setProfiles(prev => prev.filter(p => p.id !== profile.id));

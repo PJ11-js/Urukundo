@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import { UserProfile } from '../types';
 import { cloudinaryUrl } from '../services/cloudinaryService';
 import { activityStatus, relationshipGoalLabel } from '../services/profileDetails';
@@ -43,6 +45,17 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
   const [showSuperLikePaywall, setShowSuperLikePaywall] = useState(false);
   const [showBoostPaywall, setShowBoostPaywall] = useState(false);
   const [boostToast, setBoostToast] = useState<string | null>(null);
+  // La liste de découverte est résumée (pas en temps réel) : on relit en direct
+  // la présence ("En ligne") du profil affiché, 1 seule lecture par carte vue.
+  const [livePresence, setLivePresence] = useState<Record<string, Pick<UserProfile, 'isOnline' | 'lastSeen'>>>({});
+  const topId = profiles[0]?.id;
+  useEffect(() => {
+    if (!topId || livePresence[topId]) return;
+    getDoc(doc(db, 'users', topId)).then(snap => {
+      const d = snap.data();
+      if (d) setLivePresence(prev => ({ ...prev, [topId]: { isOnline: d.isOnline, lastSeen: d.lastSeen } }));
+    }).catch(() => {});
+  }, [topId]);
   const [showDetail, setShowDetail] = useState(false);
   const [superLikeNoteFor, setSuperLikeNoteFor] = useState<UserProfile | null>(null);
   const [superLikeNote, setSuperLikeNote] = useState('');
@@ -322,7 +335,7 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
   if (!currentProfile) return <div className="h-full bg-white" />;
 
   const photos = currentProfile.images?.length > 0 ? currentProfile.images : [];
-  const activity = activityStatus(currentProfile, lang);
+  const activity = activityStatus({ ...currentProfile, ...(livePresence[currentProfile.id] || {}) }, lang);
   const cardTranslateX = swipeAnim === 'like' ? 600 : swipeAnim === 'nope' ? -600 : dragX;
   const cardTranslateY = swipeAnim === 'super' ? -700 : 0;
   const cardRotation = swipeAnim === 'like' ? 35 : swipeAnim === 'nope' ? -35 : dragX * 0.06;
