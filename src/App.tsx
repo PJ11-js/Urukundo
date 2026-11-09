@@ -68,7 +68,15 @@ const App: React.FC = () => {
   // ligne quand elle part en arrière-plan (beforeunload ne marche pas sur mobile).
   useEffect(() => {
     if (!user) return;
-    const ping = (isOnline: boolean) => updateDoc(doc(db, 'users', user.uid), { isOnline, lastSeen: Date.now() }).catch(() => {});
+    // On saute le "je suis en ligne" si on l'a déjà dit il y a moins de 2 min
+    // (aller-retour rapide vers WhatsApp, etc.) : moins d'écritures Firestore.
+    let lastOnlinePing = 0;
+    const ping = (isOnline: boolean) => {
+      const now = Date.now();
+      if (isOnline && now - lastOnlinePing < 2 * 60 * 1000) return;
+      lastOnlinePing = isOnline ? now : 0;
+      updateDoc(doc(db, 'users', user.uid), { isOnline, lastSeen: now }).catch(() => {});
+    };
     const onVisibility = () => ping(document.visibilityState === 'visible');
     document.addEventListener('visibilitychange', onVisibility);
     const interval = window.setInterval(() => { if (document.visibilityState === 'visible') ping(true); }, 5 * 60 * 1000);

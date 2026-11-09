@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, setDoc, updateDoc, deleteField, arrayUnion } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, limitToLast, serverTimestamp, doc, setDoc, updateDoc, deleteField, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ChatSession, UserProfile } from '../types';
 import { getConversationStarter } from '../services/geminiService';
@@ -29,6 +29,10 @@ interface Props {
 const REPORT_REASONS_FR = ['Faux profil', 'Contenu inapproprié', 'Harcèlement', 'Autre'];
 const REPORT_REASONS_EN = ['Fake profile', 'Inappropriate content', 'Harassment', 'Other'];
 
+const PAGE_SIZE = 40;
+const TYPING_REFRESH = 4000;
+const TYPING_TTL = 7000;
+
 const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lang = 'fr', onReport, onBlock, onUnmatch, onStartCall, me = null }) => {
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
@@ -56,7 +60,8 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   const audioChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<number | null>(null);
   const typingTimerRef = useRef<number | null>(null);
-  const isTypingRef = useRef(false);
+  const lastTypingWriteRef = useRef(0);
+  const loadingOlderRef = useRef(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [isSendingPhoto, setIsSendingPhoto] = useState(false);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
@@ -101,7 +106,16 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   const t = T[lang];
   const reportReasons = lang === 'fr' ? REPORT_REASONS_FR : REPORT_REASONS_EN;
 
-  const partnerTyping = !!matchData?.typing?.[session.partner.id];
+  // "En train d'écrire" = horodatage rafraîchi toutes les 4 s pendant la frappe
+  // (au lieu d'écrire true puis false à chaque fois). Ancien format booléen toléré.
+  const partnerTypingRaw = matchData?.typing?.[session.partner.id];
+  const [, setTypingTick] = useState(0);
+  useEffect(() => {
+    if (typeof partnerTypingRaw !== 'number') return;
+    const id = window.setTimeout(() => setTypingTick(x => x + 1), Math.max(0, partnerTypingRaw + TYPING_TTL - Date.now()) + 50);
+    return () => clearTimeout(id);
+  }, [partnerTypingRaw]);
+  const partnerTyping = partnerTypingRaw === true || (typeof partnerTypingRaw === 'number' && Date.now() - partnerTypingRaw < TYPING_TTL);
   const partnerLastRead = matchData?.lastRead?.[session.partner.id] as number | undefined;
   const visibleMessages = messages.filter(msg => !msg.deletedFor?.includes(currentUserId));
   const myLiveLocationOn = !!matchData?.liveLocation?.[currentUserId];
@@ -109,14 +123,19 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
   const myCoords = matchData?.liveCoords?.[currentUserId];
   const partnerCoords = matchData?.liveCoords?.[session.partner.id];
 
+  // On ne charge que les derniers messages (1 lecture par message chargé) ;
+  // l'historique plus ancien seulement sur demande.
+  const [messageLimit, setMessageLimit] = useState(PAGE_SIZE);
+  useEffect(() => { setMessageLimit(PAGE_SIZE); }, [chatId]);
   useEffect(() => {
-    const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
+    const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'), limitToLast(messageLimit));
     const unsub = onSnapshot(q, (snapshot) => {
       setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), timestamp: doc.data().timestamp?.toMillis() || Date.now() })));
-      setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 100);
+      if (!loadingOlderRef.current) setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 100);
+      loadingOlderRef.current = false;
     });
     return () => unsub();
-  }, [chatId]);
+  }, [chatId, messageLimit]);
 
   // Présence en direct du partenaire tant que la conversation est ouverte
   // (1 lecture toutes les ~5 min, quand il met à jour sa présence).
@@ -136,16 +155,26 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
 
   // Marque la conversation comme lue dès qu'on l'a ouverte et chaque fois que
   // de nouveaux messages arrivent pendant qu'elle reste ouverte.
+  // Seulement s'il y a un message de l'autre plus récent que ma dernière lecture
+  // (mes propres envois mettent déjà lastRead à jour), regroupé sur 2 s.
+  const myLastRead = matchData?.lastRead?.[currentUserId] as number | undefined;
+  const lastPartnerMsgAt = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i].senderId !== currentUserId) return messages[i].timestamp as number;
+    return 0;
+  })();
   useEffect(() => {
-    if (!messages.length) return;
-    updateDoc(doc(db, 'matches', chatId), { [`lastRead.${currentUserId}`]: Date.now() }).catch(() => {});
-  }, [messages.length, chatId, currentUserId]);
+    if (!matchData || !lastPartnerMsgAt || (myLastRead && myLastRead >= lastPartnerMsgAt)) return;
+    const id = window.setTimeout(() => {
+      updateDoc(doc(db, 'matches', chatId), { [`lastRead.${currentUserId}`]: Date.now() }).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(id);
+  }, [lastPartnerMsgAt, myLastRead, !!matchData, chatId, currentUserId]);
 
   // Efface l'indicateur "en train d'écrire" si on quitte la conversation
   // sans avoir laissé le minuteur d'inactivité le faire.
   useEffect(() => () => {
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-    if (isTypingRef.current) updateDoc(doc(db, 'matches', chatId), { [`typing.${currentUserId}`]: false }).catch(() => {});
+    if (lastTypingWriteRef.current) updateDoc(doc(db, 'matches', chatId), { [`typing.${currentUserId}`]: deleteField() }).catch(() => {});
   }, [chatId, currentUserId]);
 
   // Suivi GPS tant que CE chat est ouvert et que le partage est activé — pas de
@@ -194,29 +223,34 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputText(e.target.value);
-    if (!isTypingRef.current) {
-      isTypingRef.current = true;
-      updateDoc(doc(db, 'matches', chatId), { [`typing.${currentUserId}`]: true }).catch(() => {});
+    const now = Date.now();
+    if (e.target.value && now - lastTypingWriteRef.current > TYPING_REFRESH) {
+      lastTypingWriteRef.current = now;
+      updateDoc(doc(db, 'matches', chatId), { [`typing.${currentUserId}`]: now }).catch(() => {});
     }
-    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-    typingTimerRef.current = window.setTimeout(() => {
-      isTypingRef.current = false;
-      updateDoc(doc(db, 'matches', chatId), { [`typing.${currentUserId}`]: false }).catch(() => {});
-    }, 2500);
+  };
+
+  // Une seule écriture pour : aperçu dans la liste des conversations + fin de
+  // "en train d'écrire" + "lu" (avant : 3 écritures séparées).
+  const updateMatchAfterSend = (preview: string) => {
+    const typingWasOn = lastTypingWriteRef.current > 0;
+    lastTypingWriteRef.current = 0;
+    updateDoc(doc(db, 'matches', chatId), {
+      lastMessageText: preview, lastMessageSenderId: currentUserId, lastMessageAt: serverTimestamp(),
+      [`lastRead.${currentUserId}`]: Date.now(),
+      ...(typingWasOn ? { [`typing.${currentUserId}`]: deleteField() } : {}),
+    }).catch(() => {});
   };
 
   const handleSend = async () => {
     if (!inputText.trim()) return;
     const text = inputText;
     setInputText('');
-    if (typingTimerRef.current) { clearTimeout(typingTimerRef.current); typingTimerRef.current = null; }
-    isTypingRef.current = false;
-    updateDoc(doc(db, 'matches', chatId), { [`typing.${currentUserId}`]: false }).catch(() => {});
     try {
       await addDoc(collection(db, 'chats', chatId, 'messages'), {
         senderId: currentUserId, text, timestamp: serverTimestamp(),
       });
-      setDoc(doc(db, 'matches', chatId), { lastMessageText: text, lastMessageSenderId: currentUserId, lastMessageAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      updateMatchAfterSend(text);
       notifyUser(session.partner.id, lang === 'fr' ? '💬 Nouveau message' : '💬 New message', text);
     } catch (err) { console.error(err); }
   };
@@ -275,7 +309,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       await addDoc(collection(db, 'chats', chatId, 'messages'), {
         senderId: currentUserId, type: 'audio', audioUrl: url, duration, timestamp: serverTimestamp(),
       });
-      setDoc(doc(db, 'matches', chatId), { lastMessageText: t.voiceMessage, lastMessageSenderId: currentUserId, lastMessageAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      updateMatchAfterSend(t.voiceMessage);
       notifyUser(session.partner.id, lang === 'fr' ? '💬 Nouveau message' : '💬 New message', t.voiceMessage);
     } catch (err) { console.error(err); alert(t.audioError); }
     setIsSendingAudio(false);
@@ -289,7 +323,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       await addDoc(collection(db, 'chats', chatId, 'messages'), {
         senderId: currentUserId, type: 'image', imageUrl: url, timestamp: serverTimestamp(),
       });
-      setDoc(doc(db, 'matches', chatId), { lastMessageText: t.photoMessage, lastMessageSenderId: currentUserId, lastMessageAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      updateMatchAfterSend(t.photoMessage);
       notifyUser(session.partner.id, lang === 'fr' ? '💬 Nouveau message' : '💬 New message', t.photoMessage);
     } catch (err) { console.error(err); alert(t.photoError); }
     setIsSendingPhoto(false);
@@ -316,7 +350,7 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       await addDoc(collection(db, 'chats', chatId, 'messages'), {
         senderId: currentUserId, type: 'gif', gifUrl: gif.url, width: gif.width, height: gif.height, timestamp: serverTimestamp(),
       });
-      setDoc(doc(db, 'matches', chatId), { lastMessageText: t.gifMessage, lastMessageSenderId: currentUserId, lastMessageAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      updateMatchAfterSend(t.gifMessage);
       notifyUser(session.partner.id, lang === 'fr' ? '💬 Nouveau message' : '💬 New message', t.gifMessage);
     } catch (err) { console.error(err); }
   };
@@ -609,9 +643,20 @@ const ChatDetailScreen: React.FC<Props> = ({ session, currentUserId, onBack, lan
       )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50" style={{ overscrollBehavior: 'contain' }}>
-        <div className="text-center py-4">
-          <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">{t.matched}</p>
-        </div>
+        {messages.length >= messageLimit ? (
+          <div className="text-center py-2">
+            <button
+              onClick={() => { loadingOlderRef.current = true; setMessageLimit(n => n + PAGE_SIZE); }}
+              className="text-xs text-red-500 font-medium px-4 py-2 rounded-full bg-white border border-red-100"
+            >
+              {lang === 'fr' ? 'Voir les messages précédents' : 'Load earlier messages'}
+            </button>
+          </div>
+        ) : (
+          <div className="text-center py-4">
+            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">{t.matched}</p>
+          </div>
+        )}
 
         {myLiveLocationOn && !partnerLiveLocationOn && (
           <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3 text-xs text-blue-600 font-medium text-center">
