@@ -60,6 +60,14 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
   const [step, setStep] = useState(1);
   const [name, setName] = useState(displayName || '');
   const [age, setAge] = useState('');
+  // Certains tapent leur année de naissance (ex. 1983) au lieu de leur âge :
+  // on la convertit, sinon le profil sort de tous les filtres d'âge.
+  const parsedAge = (() => {
+    const n = parseInt(age);
+    if (isNaN(n)) return NaN;
+    return n >= 1900 && n <= new Date().getFullYear() ? new Date().getFullYear() - n : n;
+  })();
+  const ageValid = parsedAge >= 18 && parsedAge <= 99;
   const [gender, setGender] = useState<'homme' | 'femme' | ''>('');
   const [lookingFor, setLookingFor] = useState<'homme' | 'femme'>('femme');
   const [location, setLocation] = useState('');
@@ -141,7 +149,7 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
       const profile: UserProfile = {
         id: userId,
         name: name.trim(),
-        age: parseInt(age),
+        age: parsedAge,
         bio: bio.trim() || `Amahoro ! ${lang === 'fr' ? 'Je suis' : 'I am'} ${name.trim()} 🇧🇮`,
         location: location || 'Non précisé',
         country,
@@ -276,7 +284,7 @@ const SetupScreen: React.FC<Props> = ({ userId, displayName, photoURL, onComplet
       <div className="p-6 border-t border-gray-100">
         {step < 3 ? (
           <button onClick={() => setStep(s => s + 1)}
-            disabled={(step === 1 && (!name.trim() || !age || !gender)) || (step === 2 && !coords)}
+            disabled={(step === 1 && (!name.trim() || !ageValid || !gender)) || (step === 2 && !coords)}
             className="w-full py-4 bg-red-500 text-white rounded-2xl font-bold disabled:opacity-40 active:scale-95 transition-all">
             {t.next}
           </button>

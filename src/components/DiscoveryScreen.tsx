@@ -271,6 +271,30 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
         </div>
         <h3 className="text-xl font-semibold text-gray-800">{t.noMore}</h3>
         <p className="text-gray-500 mt-2">{t.comeback}</p>
+        {(() => {
+          // Expliquer POURQUOI c'est vide : sans ça, des critères trop serrés
+          // (ex. 18–22 ans, 100 km) ressemblent à un bug.
+          const s = me?.settings;
+          const fr = lang === 'fr';
+          const parts: string[] = [];
+          const g = s?.gender || (me?.gender === 'homme' ? 'femmes' : me?.gender === 'femme' ? 'hommes' : 'tous');
+          if (g !== 'tous') parts.push(fr ? (g === 'femmes' ? 'Femmes' : 'Hommes') : (g === 'femmes' ? 'Women' : 'Men'));
+          if (s) parts.push(`${s.ageMin}–${s.ageMax} ${fr ? 'ans' : 'y/o'}`);
+          if (s && s.distance < 500 && !countryFilter) parts.push(`${s.distance} km max`);
+          if (countryFilter) parts.push(`🌍 ${countryFilter}`);
+          if (parts.length === 0) return null;
+          return (
+            <div className="mt-5 px-4 py-3 rounded-2xl bg-gray-50 text-sm text-gray-600 max-w-xs">
+              <p className="font-medium text-gray-700">{fr ? 'Tes critères actuels' : 'Your current filters'}</p>
+              <p className="mt-1">{parts.join(' · ')}</p>
+              <p className="mt-2 text-xs text-gray-400">
+                {fr
+                  ? "Pour voir plus de monde, élargis tes critères (Profil → Paramètres de découverte)."
+                  : 'To see more people, widen your filters (Profile → Discovery settings).'}
+              </p>
+            </div>
+          );
+        })()}
         <button
           onClick={onRefresh}
           className="mt-6 px-6 py-3 rounded-full border-2 border-red-500 text-red-500 font-medium flex items-center gap-2"

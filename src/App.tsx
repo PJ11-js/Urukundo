@@ -34,6 +34,9 @@ const App: React.FC = () => {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [allRealUsers, setAllRealUsers] = useState<UserProfile[]>([]);
   const [countryFilter, setCountryFilter] = useState('');
+  // Personnes à qui j'ai déjà envoyé un like (en attente de réponse) : on ne les
+  // remontre pas dans la découverte, sinon un petit nombre de profils tourne en boucle.
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [matches, setMatches] = useState<ChatSession[]>([]);
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [likesCount, setLikesCount] = useState(0);
@@ -123,11 +126,13 @@ const App: React.FC = () => {
 
   const loadProfiles = async (userId: string, coords: { lat: number; lng: number } | null, myGender?: string) => {
     try {
-      const [usersSnap, blockedByMeSnap, blockedMeSnap] = await Promise.all([
+      const [usersSnap, blockedByMeSnap, blockedMeSnap, sentLikesSnap] = await Promise.all([
         getDocs(collection(db, 'users')),
         getDocs(query(collection(db, 'blocks'), where('blockerId', '==', userId))).catch(() => ({ docs: [] } as any)),
         getDocs(query(collection(db, 'blocks'), where('blockedId', '==', userId))).catch(() => ({ docs: [] } as any)),
+        getDocs(query(collection(db, 'likes'), where('fromUserId', '==', userId))).catch(() => ({ docs: [] } as any)),
       ]);
+      setLikedIds(new Set<string>(sentLikesSnap.docs.map((d: any) => d.data().toUserId)));
       const blockedIds = new Set<string>([
         ...blockedByMeSnap.docs.map((d: any) => d.data().blockedId),
         ...blockedMeSnap.docs.map((d: any) => d.data().blockerId),
@@ -166,11 +171,16 @@ const App: React.FC = () => {
     const settingsGender = settings?.gender === 'hommes' ? 'homme' : settings?.gender === 'femmes' ? 'femme' : settings?.gender === 'tous' ? null : undefined;
     const lookingForGender = settingsGender !== undefined ? settingsGender : (myGender === 'homme' ? 'femme' : myGender === 'femme' ? 'homme' : null);
 
-    let filteredReal = lookingForGender ? allRealUsers.filter(u => !u.gender || u.gender === lookingForGender) : allRealUsers;
+    // Déjà matché ou déjà liké -> plus besoin de le proposer.
+    const matchedIds = new Set(matches.map(m => m.partner.id));
+    let filteredReal = allRealUsers.filter(u => !matchedIds.has(u.id) && !likedIds.has(u.id));
+    if (lookingForGender) filteredReal = filteredReal.filter(u => !u.gender || u.gender === lookingForGender);
 
     if (settings) {
       filteredReal = filteredReal.filter(u => u.age === undefined || (u.age >= settings.ageMin && u.age <= settings.ageMax));
-      if (settings.distance < 500) {
+      // Quand on cherche un pays précis, la distance max n'a plus de sens
+      // (chercher "Burundi" depuis la Belgique avec 100 km max ne donnait jamais rien).
+      if (settings.distance < 500 && !countryFilter) {
         filteredReal = filteredReal.filter(u => u.distance === undefined || u.distance <= settings.distance);
       }
     }
@@ -181,7 +191,7 @@ const App: React.FC = () => {
     }
 
     setProfiles(filteredReal);
-  }, [allRealUsers, countryFilter, currentUser?.gender, currentUser?.settings]);
+  }, [allRealUsers, countryFilter, currentUser?.gender, currentUser?.settings, matches, likedIds]);
 
   const handleCountrySearch = (country: string): boolean => {
     if (!currentUser?.isPremium) return false;
