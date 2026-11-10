@@ -7,6 +7,7 @@ interface Props {
   onSelectChat: (session: ChatSession) => void;
   currentUserId?: string;
   lang?: 'fr' | 'en';
+  onOpenSearch?: () => void;
 }
 
 // Photo du profil, ou son initiale si la personne n'a pas (encore) de photo :
@@ -32,10 +33,16 @@ const timeAgo = (ts: number | undefined, lang: 'fr' | 'en') => {
   return new Date(ts).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-GB', { day: 'numeric', month: 'short' });
 };
 
-const MessagesScreen: React.FC<Props> = ({ matches, onSelectChat, currentUserId, lang = 'fr' }) => {
+const MessagesScreen: React.FC<Props> = ({ matches, onSelectChat, currentUserId, lang = 'fr', onOpenSearch }) => {
   const fr = lang === 'fr';
   return (
     <div className="p-4 space-y-6">
+      {onOpenSearch && (
+        <button onClick={onOpenSearch} className="w-full flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-full px-4 py-2.5 text-sm text-gray-400">
+          <i className="fa-solid fa-magnifying-glass"></i>
+          {fr ? 'Chercher un profil par prénom…' : 'Search a profile by name…'}
+        </button>
+      )}
       <section>
         <h3 className="text-sm font-bold text-red-600 uppercase tracking-wider mb-4 px-2">{fr ? 'Nouveaux matchs' : 'New Matches'}</h3>
         <div className="flex gap-4 overflow-x-auto pb-2">

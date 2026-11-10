@@ -27,11 +27,12 @@ interface Props {
   boostActive?: boolean;
   onBoost?: () => boolean;
   me?: UserProfile | null;
+  onOpenSearch?: () => void;
 }
 
 const REPORT_REASONS = ['Faux profil', 'Contenu inapproprié', 'Harcèlement', 'Autre'];
 
-const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo, canUndo = false, onRefresh, lang = 'fr', isPremium = false, countryFilter = '', onCountrySearch, onClearCountryFilter, onReport, onBlock, canSuperLike, onSuperLike, boostActive = false, onBoost, me = null }) => {
+const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo, canUndo = false, onRefresh, lang = 'fr', isPremium = false, countryFilter = '', onCountrySearch, onClearCountryFilter, onReport, onBlock, canSuperLike, onSuperLike, boostActive = false, onBoost, me = null, onOpenSearch }) => {
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [activePhoto, setActivePhoto] = useState(0);
@@ -331,6 +332,11 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
               : "Still nobody new: you've seen everyone matching your filters (people you liked don't come back). Check back later or widen your filters."}
           </p>
         )}
+        {onOpenSearch && (
+          <button onClick={onOpenSearch} className="mt-3 px-5 py-2 rounded-full bg-gray-100 text-gray-600 text-sm font-medium flex items-center gap-2">
+            <i className="fa-solid fa-magnifying-glass"></i> {lang === 'fr' ? 'Retrouver un profil par son prénom' : 'Find a profile by name'}
+          </button>
+        )}
         {canUndo && (
           <button onClick={onUndo} className="mt-3 text-sm text-gray-400 underline">
             {t.undoLast}
@@ -377,6 +383,12 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
             {countryFilter && (
               <button onClick={onClearCountryFilter} className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center">
                 <i className="fa-solid fa-xmark text-xs"></i>
+              </button>
+            )}
+            {onOpenSearch && (
+              <button onClick={onOpenSearch} aria-label={lang === 'fr' ? 'Chercher un profil' : 'Search a profile'}
+                className="w-9 h-9 rounded-full bg-gray-50 border border-gray-100 text-gray-500 flex items-center justify-center">
+                <i className="fa-solid fa-magnifying-glass text-sm"></i>
               </button>
             )}
             {me && (

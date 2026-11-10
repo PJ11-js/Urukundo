@@ -11,6 +11,7 @@ import LegalScreen from './components/LegalScreen';
 import SetupScreen from './components/SetupScreen';
 import DiscoveryScreen from './components/DiscoveryScreen';
 import MessagesScreen from './components/MessagesScreen';
+import ProfileSearchModal from './components/ProfileSearchModal';
 import ProfileScreen from './components/ProfileScreen';
 import ChatDetailScreen from './components/ChatDetailScreen';
 import LikesScreen from './components/LikesScreen';
@@ -41,6 +42,7 @@ const App: React.FC = () => {
   // Profils déjà swipés pendant cette session (like ou non) : ne réapparaissent
   // pas quand la liste est recalculée, seulement après "Recharger".
   const swipedRef = useRef<Set<string>>(new Set());
+  const [showSearch, setShowSearch] = useState(false);
   const partnerCache = useRef<Map<string, { profile: UserProfile; at: number }>>(new Map());
   const [matches, setMatches] = useState<ChatSession[]>([]);
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
@@ -638,13 +640,32 @@ const App: React.FC = () => {
             boostActive={!!(currentUser?.boostedUntil && currentUser.boostedUntil > Date.now())}
             onBoost={handleBoost}
             me={currentUser}
+            onOpenSearch={() => setShowSearch(true)}
           />
         )}
         {currentScreen === AppScreen.LIKES && user && currentUser && <LikesScreen currentUserId={user.uid} currentUserName={currentUser.name} onMatch={handleMatch} />}
-        {currentScreen === AppScreen.MESSAGES && <MessagesScreen matches={matches} onSelectChat={openChat} currentUserId={user?.uid} lang={lang} />}
+        {currentScreen === AppScreen.MESSAGES && <MessagesScreen matches={matches} onSelectChat={openChat} currentUserId={user?.uid} lang={lang} onOpenSearch={() => setShowSearch(true)} />}
         {currentScreen === AppScreen.PROFILE && currentUser && <ProfileScreen user={currentUser} setUser={setCurrentUser} onSignOut={() => setShowFeedback(true)} matches={matches} lang={lang} />}
         {currentScreen === AppScreen.CHAT && activeChat && user && <ChatDetailScreen session={activeChat} currentUserId={user.uid} onBack={() => setCurrentScreen(AppScreen.MESSAGES)} lang={lang} onReport={handleReport} onBlock={handleBlock} onUnmatch={handleUnmatch} onStartCall={handleStartCall} me={currentUser} />}
       </main>
+
+      {showSearch && (() => {
+        // Les matchs en plus de la découverte, au cas où un partenaire n'y serait plus.
+        const byId = new Map<string, UserProfile>();
+        allRealUsers.forEach(u => byId.set(u.id, u));
+        matches.forEach(m => { if (!byId.has(m.partner.id)) byId.set(m.partner.id, m.partner); });
+        return (
+          <ProfileSearchModal
+            people={[...byId.values()]}
+            likedIds={likedIds}
+            matchedIds={new Set(matches.map(m => m.partner.id))}
+            lang={lang}
+            onClose={() => setShowSearch(false)}
+            onLike={(p) => handleLike(p)}
+            onOpenChat={(id) => { const m = matches.find(x => x.partner.id === id); if (m) { setShowSearch(false); openChat(m); } }}
+          />
+        );
+      })()}
 
       {currentScreen !== AppScreen.CHAT && <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} matches={matches} likesCount={likesCount} />}
     </div>
