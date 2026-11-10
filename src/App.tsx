@@ -455,7 +455,14 @@ const App: React.FC = () => {
 
   // Recharge la liste depuis le serveur (nouveaux inscrits), distinct du
   // "annuler le dernier swipe" ci-dessus.
-  const handleRefresh = () => { if (user) { swipedRef.current = new Set(); updateUserLocation(user.uid); } };
+  // Pas d'attente GPS ici (jusqu'à 15 s sans rien à l'écran) : la position
+  // connue suffit, elle est déjà remise à jour à l'ouverture de l'appli.
+  const handleRefresh = async () => {
+    if (!user) return;
+    swipedRef.current = new Set();
+    const coords = currentUser?.lat && currentUser?.lng ? { lat: currentUser.lat, lng: currentUser.lng } : null;
+    await loadProfiles(user.uid, coords);
+  };
 
   const handleBlock = async (profile: UserProfile) => {
     setProfiles(prev => prev.filter(p => p.id !== profile.id));

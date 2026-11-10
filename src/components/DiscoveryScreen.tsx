@@ -14,7 +14,7 @@ interface Props {
   onDislike: (id: string) => void;
   onUndo: () => void;
   canUndo?: boolean;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
   lang?: 'fr' | 'en';
   isPremium?: boolean;
   countryFilter?: string;
@@ -60,6 +60,15 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
   const [superLikeNoteFor, setSuperLikeNoteFor] = useState<UserProfile | null>(null);
   const [superLikeNote, setSuperLikeNote] = useState('');
   const [showTopPicks, setShowTopPicks] = useState(false);
+  // Recharger : montrer que ça tourne, puis dire clairement s'il n'y a
+  // vraiment personne de nouveau (sinon le bouton a l'air cassé).
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshedEmpty, setRefreshedEmpty] = useState(false);
+  const doRefresh = async () => {
+    if (!onRefresh || refreshing) return;
+    setRefreshing(true); setRefreshedEmpty(false);
+    try { await onRefresh(); } finally { setRefreshing(false); setRefreshedEmpty(true); }
+  };
 
   const startX = useRef(0);
   const animating = useRef(false);
@@ -309,11 +318,19 @@ const DiscoveryScreen: React.FC<Props> = ({ profiles, onLike, onDislike, onUndo,
           );
         })()}
         <button
-          onClick={onRefresh}
-          className="mt-6 px-6 py-3 rounded-full border-2 border-red-500 text-red-500 font-medium flex items-center gap-2"
+          onClick={doRefresh}
+          disabled={refreshing}
+          className="mt-6 px-6 py-3 rounded-full border-2 border-red-500 text-red-500 font-medium flex items-center gap-2 disabled:opacity-60"
         >
-          <i className="fa-solid fa-arrows-rotate"></i> {t.reload}
+          <i className={`fa-solid fa-arrows-rotate ${refreshing ? 'fa-spin' : ''}`}></i> {refreshing ? (lang === 'fr' ? 'Chargement…' : 'Loading…') : t.reload}
         </button>
+        {refreshedEmpty && !refreshing && (
+          <p className="mt-3 text-xs text-gray-400 max-w-xs">
+            {lang === 'fr'
+              ? "Toujours personne de nouveau : tu as déjà vu tous les profils qui correspondent à tes critères (ceux que tu as likés ne reviennent pas). Reviens plus tard ou élargis tes critères."
+              : "Still nobody new: you've seen everyone matching your filters (people you liked don't come back). Check back later or widen your filters."}
+          </p>
+        )}
         {canUndo && (
           <button onClick={onUndo} className="mt-3 text-sm text-gray-400 underline">
             {t.undoLast}
